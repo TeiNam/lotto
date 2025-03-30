@@ -1,0 +1,37 @@
+### 환경 변수 설정
+@baseUrl = http://localhost:8000
+@contentType = application/json
+
+### API 루트 엔드포인트 테스트
+GET {{baseUrl}}
+Accept: {{contentType}}
+
+### 로또 번호 예측 API 호출
+POST {{baseUrl}}/api/predict
+Content-Type: {{contentType}}
+
+{
+  "count": 5
+}
+
+### 예측 개수를 10개로 설정한 예측 API 호출
+POST {{baseUrl}}/api/predict
+Content-Type: {{contentType}}
+
+{
+  "count": 10
+}
+
+### 헬스 체크 (API가 살아있는지 확인)
+### 참고: 실제 API에 이 엔드포인트가 존재해야 합니다. 없다면 추가 필요
+GET {{baseUrl}}/api/health
+Accept: {{contentType}}
+
+### 당첨 결과 저장
+POST {{baseUrl}}/api/results
+Content-Type: {{contentType}}
+
+{
+  "draw_no": 1166,
+  "numbers": [1, 15, 19, 23, 28, 42]
+}
