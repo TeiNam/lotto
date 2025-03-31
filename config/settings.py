@@ -39,6 +39,14 @@ FREQUENCY_WEIGHT = 0.3
 ENABLE_CACHE = os.getenv("ENABLE_CACHE", "true").lower() == "true"
 CACHE_TTL = int(os.getenv("CACHE_TTL", "3600"))  # 초 단위 (기본값: 1시간)
 
+# 슬랙 웹훅 설정
+SLACK_WEBHOOK_URL = os.getenv('SLACK_WEBHOOK_URL')
+
+# 필수 환경 변수 목록에 SLACK_WEBHOOK_URL 추가
+REQUIRED_ENV_VARS = [
+    'DB_HOST', 'DB_USER', 'DB_PASSWORD', 'DB_NAME', 'ANTHROPIC_API_KEY',
+    'SLACK_WEBHOOK_URL'  # 슬랙 웹훅 URL 추가
+]
 
 def verify_required_env_vars():
     """필수 환경 변수 검증"""
