@@ -39,6 +39,7 @@ DB_NAME=lotto_db
 DB_PORT=3306
 ANTHROPIC_API_KEY=your_anthropic_api_key
 ANTHROPIC_MODEL=claude-3-7-sonnet-20250219
+SLACK_WEBHOOK_URL=webhook-url
 ```
 
 ### 일반 실행 방법
