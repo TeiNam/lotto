@@ -33,3 +33,11 @@ class ConfigurationError(LottoPredictionError):
 class ValidationError(LottoPredictionError):
     """입력 데이터 유효성 검증 오류"""
     pass
+
+class SlackNotificationError(LottoPredictionError):
+    """슬랙 알림 전송 중 발생한 오류"""
+    pass
+
+class SchedulerError(LottoPredictionError):
+    """스케줄러 작업 중 발생한 오류"""
+    pass

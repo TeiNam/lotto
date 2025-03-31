@@ -3,6 +3,7 @@ import logging
 from typing import List, Dict, Any, Optional
 
 from database.connector import AsyncDatabaseConnector
+from utils.exceptions import DatabaseError
 
 logger = logging.getLogger("lotto_prediction")
 
@@ -140,3 +141,64 @@ class AsyncLottoRepository:
         except Exception as e:
             logger.error(f"당첨 결과 저장 중 DB 오류: {e}, 번호: {sorted_numbers}, 회차: {draw_no}")
             return False
+
+    @classmethod
+    async def check_draw_exists(cls, draw_no: int) -> bool:
+        """지정된 회차가 result 테이블에 이미 존재하는지 확인"""
+        try:
+            pool = await AsyncDatabaseConnector.get_pool()
+
+            async with pool.acquire() as conn:
+                async with conn.cursor() as cursor:
+                    query = "SELECT COUNT(*) as count FROM result WHERE no = %s"
+                    await cursor.execute(query, (draw_no,))
+                    result = await cursor.fetchone()
+
+                    # 결과가 딕셔너리인지 튜플인지 확인하고 적절히 처리
+                    if result:
+                        if isinstance(result, dict):
+                            # 딕셔너리 형태로 반환되는 경우
+                            return result.get('count', 0) > 0
+                        elif isinstance(result, (list, tuple)):
+                            # 튜플 형태로 반환되는 경우
+                            return result[0] > 0
+
+                    return False
+
+        except Exception as e:
+            logger.error(f"회차 존재 여부 확인 중 오류: {e}")
+            raise DatabaseError(f"회차 존재 여부 확인 중 오류: {e}")
+
+    @classmethod
+    async def get_recommendations_for_draw(cls, draw_no: int) -> List[Dict[str, Any]]:
+        """특정 회차에 대한 예측 결과 조회"""
+        try:
+            pool = await AsyncDatabaseConnector.get_pool()
+
+            async with pool.acquire() as conn:
+                async with conn.cursor() as cursor:
+                    query = """
+                    SELECT id, next_no, `1`, `2`, `3`, `4`, `5`, `6`, create_at
+                    FROM recommand
+                    WHERE next_no = %s
+                    ORDER BY id ASC
+                    """
+
+                    await cursor.execute(query, (draw_no,))
+                    results = await cursor.fetchall()
+
+                    recommendations = []
+                    for row in results:
+                        numbers = [row[f'{i}'] for i in range(1, 7)]
+                        recommendations.append({
+                            "id": row['id'],
+                            "next_no": row['next_no'],
+                            "numbers": numbers,
+                            "create_at": row['create_at']
+                        })
+
+                    return recommendations
+
+        except Exception as e:
+            logger.error(f"예측 결과 조회 중 오류: {e}")
+            raise DatabaseError(f"예측 결과 조회 중 오류: {e}")

@@ -6,7 +6,7 @@ import logging
 from config.settings import verify_required_env_vars
 from database.connector import AsyncDatabaseConnector
 
-from api.routers import prediction
+from api.routers import prediction, scheduler, lottery
 
 # 로깅 설정
 logger = logging.getLogger("lotto_prediction")
@@ -32,6 +32,37 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"데이터베이스 연결 실패: {e}")
 
+    # 스케줄러 초기화 및 시작
+    try:
+        # 의존성 함수를 직접 호출하지 않고 필요한 서비스들을 직접 생성
+        from services.data_service import AsyncDataService
+        from services.prediction_service import AsyncPredictionService
+        from services.slack_service import SlackNotifier
+        from services.scheduler_service import PredictionScheduler
+        from api.routers.scheduler import _scheduler
+
+        # 서비스 인스턴스 생성
+        data_service = AsyncDataService()
+        prediction_service = AsyncPredictionService(data_service)
+        slack_notifier = SlackNotifier()
+
+        # 스케줄러 초기화 (싱글톤 패턴 사용)
+        global _scheduler
+        if _scheduler is None:
+            _scheduler = PredictionScheduler(
+                data_service=data_service,
+                prediction_service=prediction_service,
+                slack_notifier=slack_notifier
+            )
+
+        # 스케줄러 시작 (비동기)
+        if not _scheduler.running:
+            await _scheduler.start()
+            logger.info("예측 스케줄러 자동 시작됨")
+    except Exception as e:
+        logger.error(f"스케줄러 초기화 실패: {e}")
+        logger.info("스케줄러 없이 애플리케이션 실행 중...")
+
     logger.info("애플리케이션 초기화 완료")
 
     yield  # FastAPI 애플리케이션 실행
@@ -39,13 +70,21 @@ async def lifespan(app: FastAPI):
     # 종료 시 실행
     logger.info("애플리케이션 종료 중...")
 
+    # 스케줄러 중지
+    try:
+        from api.routers.scheduler import _scheduler
+        if _scheduler and _scheduler.running:
+            _scheduler.stop()
+            logger.info("예측 스케줄러 정상 종료됨")
+    except Exception as e:
+        logger.error(f"스케줄러 종료 실패: {e}")
+
     # 데이터베이스 연결 풀 종료
     await AsyncDatabaseConnector.close_pool()
 
     logger.info("모든 리소스가 정상적으로 종료되었습니다.")
 
 
-# FastAPI 앱 생성 (lifespan 컨텍스트 매니저 적용)
 app = FastAPI(
     title="Lotto Prediction API",
     description="로또 번호 예측 시스템 API",
@@ -64,7 +103,8 @@ app.add_middleware(
 
 # 라우터 등록
 app.include_router(prediction.router, prefix="/api", tags=["prediction"])
-
+app.include_router(scheduler.router, prefix="/api", tags=["scheduler"])
+app.include_router(lottery.router, prefix="/api", tags=["lottery"])
 
 @app.get("/", tags=["root"])
 async def root():
