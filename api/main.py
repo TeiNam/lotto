@@ -34,33 +34,33 @@ async def lifespan(app: FastAPI):
 
     # 스케줄러 초기화 및 시작
     try:
-        # 의존성 함수를 직접 호출하지 않고 필요한 서비스들을 직접 생성
+        # 필요한 서비스들을 직접 생성
         from services.data_service import AsyncDataService
         from services.prediction_service import AsyncPredictionService
         from services.slack_service import SlackNotifier
         from services.scheduler_service import PredictionScheduler
-        from api.routers.scheduler import _scheduler
 
         # 서비스 인스턴스 생성
         data_service = AsyncDataService()
         prediction_service = AsyncPredictionService(data_service)
         slack_notifier = SlackNotifier()
 
-        # 스케줄러 초기화 (싱글톤 패턴 사용)
-        global _scheduler
-        if _scheduler is None:
-            _scheduler = PredictionScheduler(
-                data_service=data_service,
-                prediction_service=prediction_service,
-                slack_notifier=slack_notifier
-            )
+        # 스케줄러 초기화
+        scheduler = PredictionScheduler(
+            data_service=data_service,
+            prediction_service=prediction_service,
+            slack_notifier=slack_notifier
+        )
+
+        # 전역 변수로 스케줄러 인스턴스 설정 (api/routers/scheduler.py에서 접근 가능하도록)
+        from api.routers.scheduler import set_scheduler_instance
+        set_scheduler_instance(scheduler)
 
         # 스케줄러 시작 (비동기)
-        if not _scheduler.running:
-            await _scheduler.start()
-            logger.info("예측 스케줄러 자동 시작됨")
+        await scheduler.start()
+        logger.info("예측 스케줄러 자동 시작됨")
     except Exception as e:
-        logger.error(f"스케줄러 초기화 실패: {e}")
+        logger.exception(f"스케줄러 초기화 실패: {e}")
         logger.info("스케줄러 없이 애플리케이션 실행 중...")
 
     logger.info("애플리케이션 초기화 완료")
@@ -72,9 +72,10 @@ async def lifespan(app: FastAPI):
 
     # 스케줄러 중지
     try:
-        from api.routers.scheduler import _scheduler
-        if _scheduler and _scheduler.running:
-            _scheduler.stop()
+        from api.routers.scheduler import get_scheduler_instance
+        scheduler_instance = get_scheduler_instance()
+        if scheduler_instance and scheduler_instance.running:
+            scheduler_instance.stop()
             logger.info("예측 스케줄러 정상 종료됨")
     except Exception as e:
         logger.error(f"스케줄러 종료 실패: {e}")

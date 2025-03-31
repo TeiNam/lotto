@@ -17,6 +17,28 @@ logger = logging.getLogger("lotto_prediction")
 # 전역 스케줄러 객체 (싱글톤)
 _scheduler: Optional[PredictionScheduler] = None
 
+# 스케줄러 인스턴스 설정 및 획득 함수
+def set_scheduler_instance(scheduler: PredictionScheduler) -> None:
+    """전역 스케줄러 인스턴스 설정"""
+    global _scheduler
+    _scheduler = scheduler
+    logger.info("스케줄러 인스턴스가 전역적으로 설정되었습니다.")
+
+def get_scheduler_instance() -> Optional[PredictionScheduler]:
+    """전역 스케줄러 인스턴스 획득"""
+    return _scheduler
+
+# 스케줄러 객체 의존성 함수 - 간소화
+def get_scheduler() -> PredictionScheduler:
+    """스케줄러 의존성 함수"""
+    if _scheduler is None:
+        # 이 시점에서 스케줄러가 없다면 오류
+        logger.error("스케줄러 인스턴스가 초기화되지 않았습니다.")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="스케줄러 서비스가 초기화되지 않았습니다."
+        )
+    return _scheduler
 
 # 스케줄러 객체 가져오기
 def get_scheduler(

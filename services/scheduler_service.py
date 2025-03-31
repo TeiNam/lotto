@@ -40,10 +40,15 @@ class PredictionScheduler:
             # 현재 이벤트 루프 가져오기
             try:
                 loop = asyncio.get_running_loop()
+                logger.info("기존 이벤트 루프 사용")
             except RuntimeError:
                 # 실행 중인 이벤트 루프가 없으면 새로 생성
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
+                logger.info("새 이벤트 루프 생성")
+
+            # 스케줄러 작업 정의
+            logger.info("스케줄러 작업 정의 시작...")
 
             # 월요일 오전 11시 예측 작업 스케줄링
             self.scheduler.add_job(
@@ -52,6 +57,7 @@ class PredictionScheduler:
                 id='monday_prediction',
                 kwargs={'count': 5, 'job_name': '월요일 오전 11시'}
             )
+            logger.info("월요일 오전 11시 예측 작업 스케줄링 완료")
 
             # 금요일 오후 3시 예측 작업 스케줄링
             self.scheduler.add_job(
@@ -60,19 +66,27 @@ class PredictionScheduler:
                 id='friday_prediction',
                 kwargs={'count': 5, 'job_name': '금요일 오후 3시'}
             )
+            logger.info("금요일 오후 3시 예측 작업 스케줄링 완료")
 
-            # 일요일 오전 9시 당첨번호 업데이트 작업 스케줄링 (추가)
+            # 일요일 오전 9시 당첨번호 업데이트 작업 스케줄링
             self.scheduler.add_job(
                 self._run_lottery_update_job,
                 CronTrigger(day_of_week='sun', hour=9, minute=0),
                 id='sunday_lottery_update',
                 kwargs={'job_name': '일요일 오전 9시 당첨번호 업데이트'}
             )
+            logger.info("일요일 오전 9시 당첨번호 업데이트 작업 스케줄링 완료")
 
             # 스케줄러 시작
+            logger.info("스케줄러 시작 중...")
             self.scheduler.start()
             self.running = True
             logger.info("예측 스케줄러 시작됨 (월요일 11시, 금요일 15시, 일요일 9시)")
+
+            # 다음 실행 시간 로깅
+            next_runs = self.get_next_run_times()
+            for job_id, next_run in next_runs.items():
+                logger.info(f"작업 '{job_id}'의 다음 실행 시간: {next_run}")
 
         except Exception as e:
             logger.exception(f"스케줄러 시작 실패: {str(e)}")
