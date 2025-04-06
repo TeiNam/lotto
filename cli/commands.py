@@ -35,8 +35,8 @@ class CLI:
             help="시작 회차 (기본값: 601)"
         )
         load_parser.add_argument(
-            "--end", type=int, default=1165,
-            help="종료 회차 (기본값: 1165)"
+            "--end", type=int, default=1166,
+            help="종료 회차 (기본값: 1166)"
         )
 
         # 예측 명령

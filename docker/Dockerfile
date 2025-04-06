@@ -4,13 +4,18 @@ FROM python:3.13.2-slim
 # 작업 디렉토리 설정
 WORKDIR /app
 
-# 시스템 패키지 설치
+# 시스템 패키지 설치 및 시간대 설정
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \
     netcat-traditional \
+    tzdata \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+
+# 시간대 설정 (KST)
+ENV TZ=Asia/Seoul
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 # 파이썬 환경 설정
 ENV PYTHONDONTWRITEBYTECODE=1 \

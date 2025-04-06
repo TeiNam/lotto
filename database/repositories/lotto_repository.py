@@ -177,6 +177,14 @@ class AsyncLottoRepository:
 
             async with pool.acquire() as conn:
                 async with conn.cursor() as cursor:
+                    # 먼저 전체 회차 목록 조회 (디버깅용)
+                    check_query = "SELECT DISTINCT next_no FROM recommand ORDER BY next_no"
+                    await cursor.execute(check_query)
+                    all_draws = await cursor.fetchall()
+                    available_draws = [row['next_no'] for row in all_draws]
+                    logger.debug(f"사용 가능한 예측 회차: {available_draws}")
+                    
+                    # 원래 쿼리
                     query = """
                     SELECT id, next_no, `1`, `2`, `3`, `4`, `5`, `6`, create_at
                     FROM recommand
@@ -184,8 +192,12 @@ class AsyncLottoRepository:
                     ORDER BY id ASC
                     """
 
+                    # 정수형으로 명시적 변환
+                    draw_no = int(draw_no)
                     await cursor.execute(query, (draw_no,))
                     results = await cursor.fetchall()
+                    
+                    logger.debug(f"조회된 결과 수: {len(results)} for draw_no: {draw_no}")
 
                     recommendations = []
                     for row in results:
@@ -202,3 +214,19 @@ class AsyncLottoRepository:
         except Exception as e:
             logger.error(f"예측 결과 조회 중 오류: {e}")
             raise DatabaseError(f"예측 결과 조회 중 오류: {e}")
+            
+    @classmethod
+    async def execute_raw_query(cls, query: str, params: tuple = None):
+        """임의의 쿼리 실행 (디버깅용)"""
+        try:
+            pool = await AsyncDatabaseConnector.get_pool()
+
+            async with pool.acquire() as conn:
+                async with conn.cursor() as cursor:
+                    await cursor.execute(query, params or ())
+                    results = await cursor.fetchall()
+                    return results
+
+        except Exception as e:
+            logger.error(f"쿼리 실행 중 오류: {e}")
+            raise DatabaseError(f"쿼리 실행 중 오류: {e}")

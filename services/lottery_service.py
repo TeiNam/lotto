@@ -322,11 +322,23 @@ class LotteryService:
             # 데이터베이스에서 해당 회차에 대한 예측 결과 조회
             from database.repositories.lotto_repository import AsyncLottoRepository
 
+            # draw_no를 정수형으로 명시적 변환
+            draw_no = int(draw_no)
+            
+            # 디버깅: 모든 회차 정보 확인
+            all_draw_records = await AsyncLottoRepository.execute_raw_query(
+                "SELECT DISTINCT next_no FROM recommand ORDER BY next_no"
+            )
+            available_draws = [rec['next_no'] for rec in all_draw_records] if all_draw_records else []
+            logger.info(f"예측 데이터베이스에 있는 회차 정보: {available_draws}")
+            
             # recommand 테이블에서 next_no가 현재 회차인 예측 결과 조회
             predictions = await AsyncLottoRepository.get_recommendations_for_draw(draw_no)
 
+            logger.info(f"로또 {draw_no}회차에 대한 예측 결과 조회: {len(predictions)}개 조회됨")
+
             if not predictions:
-                logger.warning(f"로또 {draw_no}회차에 대한 예측 결과가 없습니다")
+                logger.warning(f"로또 {draw_no}회차에 대한 예측 결과가 recommand 테이블에 없음")
                 return []
 
             # 각 예측 결과와 당첨 번호 비교
