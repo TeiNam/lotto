@@ -226,7 +226,11 @@ class SlackNotifier:
                 "text": {
                     "type": "mrkdwn",
                     "text": "*🔮 예측 결과 비교*\n"
-                            f"{draw_no}회차에 대한 예측 결과가 없습니다."
+                            f"{draw_no}회차에 대한 예측 결과를 찾을 수 없습니다.\n"
+                            f"가능한 원인:\n"
+                            f"• recommand 테이블에 next_no={draw_no} 데이터가 없음\n"
+                            f"• 이전 스케줄러 실행 시 예측을 저장하지 못함\n"
+                            f"수동으로 CLI 또는 API를 통해 예측을 실행해보세요."
                 }
             })
 

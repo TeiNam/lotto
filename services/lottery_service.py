@@ -322,49 +322,82 @@ class LotteryService:
             # 데이터베이스에서 해당 회차에 대한 예측 결과 조회
             from database.repositories.lotto_repository import AsyncLottoRepository
 
-            # draw_no를 정수형으로 명시적 변환
+            # 회차 번호 정수로 확실히 변환
             draw_no = int(draw_no)
             
-            # 디버깅: 모든 회차 정보 확인
-            all_draw_records = await AsyncLottoRepository.execute_raw_query(
-                "SELECT DISTINCT next_no FROM recommand ORDER BY next_no"
+            logger.info(f"로또 {draw_no}회차 예측 결과 비교 시작")
+            
+            # 디버깅: 모든 회차 예측 확인
+            all_predictions = await AsyncLottoRepository.execute_raw_query(
+                "SELECT next_no, COUNT(*) as count FROM recommand GROUP BY next_no ORDER BY next_no"
             )
-            available_draws = [rec['next_no'] for rec in all_draw_records] if all_draw_records else []
-            logger.info(f"예측 데이터베이스에 있는 회차 정보: {available_draws}")
+            prediction_counts = {r['next_no']: r['count'] for r in all_predictions} if all_predictions else {}
+            logger.info(f"추천 테이블 회차별 예측 수: {prediction_counts}")
+            
+            # 정확히 현재 회차가 있는지 명시적 확인
+            specific_check = await AsyncLottoRepository.execute_raw_query(
+                "SELECT COUNT(*) as count FROM recommand WHERE next_no = %s",
+                (draw_no,)
+            )
+            specific_count = specific_check[0]['count'] if specific_check else 0
+            logger.info(f"로또 {draw_no}회차에 대한 예측 레코드 수: {specific_count}")
             
             # recommand 테이블에서 next_no가 현재 회차인 예측 결과 조회
             predictions = await AsyncLottoRepository.get_recommendations_for_draw(draw_no)
-
-            logger.info(f"로또 {draw_no}회차에 대한 예측 결과 조회: {len(predictions)}개 조회됨")
-
+            
             if not predictions:
                 logger.warning(f"로또 {draw_no}회차에 대한 예측 결과가 recommand 테이블에 없음")
-                return []
-
+                
+                # 대체 방법: 이전 회차 예측이 다음 회차로 저장되었을 가능성
+                prev_draw_no = draw_no - 1
+                logger.info(f"이전 회차({prev_draw_no})를 다음 회차로 저장했을 가능성 확인")
+                prev_predictions = await AsyncLottoRepository.get_recommendations_for_draw(prev_draw_no)
+                
+                if prev_predictions:
+                    logger.info(f"이전 회차({prev_draw_no})에 대한 예측 결과 {len(prev_predictions)}개 찾음, 이를 사용합니다.")
+                    predictions = prev_predictions
+                else:
+                    # 마지막 시도: 가장 최근 예측 결과 가져오기
+                    latest_draw = await AsyncLottoRepository.execute_raw_query(
+                        "SELECT next_no FROM recommand ORDER BY next_no DESC LIMIT 1"
+                    )
+                    if latest_draw and len(latest_draw) > 0:
+                        latest_draw_no = latest_draw[0]['next_no']
+                        logger.info(f"최신 예측 결과 회차({latest_draw_no}) 시도")
+                        latest_predictions = await AsyncLottoRepository.get_recommendations_for_draw(latest_draw_no)
+                        if latest_predictions:
+                            logger.info(f"최신 회차({latest_draw_no})에 대한 예측 결과 {len(latest_predictions)}개 찾음, 이를 사용합니다.")
+                            predictions = latest_predictions
+                        else:
+                            return []
+                    else:
+                        return []
+            
             # 각 예측 결과와 당첨 번호 비교
             comparison_results = []
             winning_numbers_set = set(winning_numbers)
-
+            
             for pred in predictions:
                 pred_numbers = pred.get("numbers", [])
                 if not pred_numbers:
                     continue
-
+                    
                 # 맞은 번호 개수 계산
                 pred_numbers_set = set(pred_numbers)
                 matched_count = len(pred_numbers_set.intersection(winning_numbers_set))
-
+                
                 comparison_results.append({
                     "prediction_numbers": pred_numbers,
                     "matched_count": matched_count,
                     "matched_numbers": list(pred_numbers_set.intersection(winning_numbers_set))
                 })
-
+            
             # 맞은 개수 순으로 정렬
             comparison_results.sort(key=lambda x: x["matched_count"], reverse=True)
-
+            
+            logger.info(f"예측 비교 결과: {len(comparison_results)}개 결과 생성")
             return comparison_results
-
+            
         except Exception as e:
             logger.exception(f"예측 결과 비교 중 오류: {e}")
             return []

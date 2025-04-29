@@ -173,8 +173,12 @@ class AsyncLottoRepository:
     async def get_recommendations_for_draw(cls, draw_no: int) -> List[Dict[str, Any]]:
         """특정 회차에 대한 예측 결과 조회"""
         try:
+            # 정수형으로 명시적 변환
+            draw_no = int(draw_no)
+            logger.info(f"회차 {draw_no}에 대한 예측 조회 시작")
+            
             pool = await AsyncDatabaseConnector.get_pool()
-
+            
             async with pool.acquire() as conn:
                 async with conn.cursor() as cursor:
                     # 먼저 전체 회차 목록 조회 (디버깅용)
@@ -182,7 +186,14 @@ class AsyncLottoRepository:
                     await cursor.execute(check_query)
                     all_draws = await cursor.fetchall()
                     available_draws = [row['next_no'] for row in all_draws]
-                    logger.debug(f"사용 가능한 예측 회차: {available_draws}")
+                    logger.info(f"사용 가능한 예측 회차: {available_draws}")
+                    
+                    # 해당 회차의 레코드 개수 확인
+                    count_query = "SELECT COUNT(*) as count FROM recommand WHERE next_no = %s"
+                    await cursor.execute(count_query, (draw_no,))
+                    count_result = await cursor.fetchone()
+                    record_count = count_result['count'] if count_result else 0
+                    logger.info(f"회차 {draw_no}에 대한 레코드 수: {record_count}")
                     
                     # 원래 쿼리
                     query = """
@@ -191,26 +202,33 @@ class AsyncLottoRepository:
                     WHERE next_no = %s
                     ORDER BY id ASC
                     """
-
-                    # 정수형으로 명시적 변환
-                    draw_no = int(draw_no)
+                    
                     await cursor.execute(query, (draw_no,))
                     results = await cursor.fetchall()
                     
-                    logger.debug(f"조회된 결과 수: {len(results)} for draw_no: {draw_no}")
-
+                    logger.info(f"조회된 결과 수: {len(results)} for draw_no: {draw_no}")
+                    
+                    if not results:
+                        # 쿼리 실행이 성공했으나 결과가 없는 경우
+                        logger.warning(f"회차 {draw_no}에 대한 예측 결과가 없습니다")
+                        return []
+                    
                     recommendations = []
                     for row in results:
-                        numbers = [row[f'{i}'] for i in range(1, 7)]
-                        recommendations.append({
-                            "id": row['id'],
-                            "next_no": row['next_no'],
-                            "numbers": numbers,
-                            "create_at": row['create_at']
-                        })
-
+                        try:
+                            numbers = [row[f'{i}'] for i in range(1, 7)]
+                            recommendations.append({
+                                "id": row['id'],
+                                "next_no": row['next_no'],
+                                "numbers": numbers,
+                                "create_at": row['create_at']
+                            })
+                        except Exception as row_e:
+                            logger.error(f"행 처리 중 오류: {row_e}, row: {row}")
+                            continue
+                    
                     return recommendations
-
+                    
         except Exception as e:
             logger.error(f"예측 결과 조회 중 오류: {e}")
             raise DatabaseError(f"예측 결과 조회 중 오류: {e}")

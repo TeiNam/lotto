@@ -99,6 +99,7 @@ class PredictionScheduler:
 
         try:
             from services.lottery_service import LotteryService
+            from database.repositories.lotto_repository import AsyncLottoRepository
 
             # 최신 당첨 정보 업데이트
             success = await LotteryService.update_latest_draw()
@@ -109,6 +110,32 @@ class PredictionScheduler:
                 # 데이터 서비스 새로고침 (새 당첨 정보 반영)
                 await self.data_service.load_historical_data()
                 logger.info(f"[{job_name}] 예측 서비스 데이터 새로고침 완료")
+                
+                # 현재 업데이트된 회차 번호 확인
+                last_draw = self.data_service.get_last_draw()
+                if last_draw:
+                    current_draw_no = last_draw.draw_no
+                    logger.info(f"[{job_name}] 현재 당첨 정보 회차: {current_draw_no}")
+                    
+                    # 해당 회차의 예측 결과가 있는지 확인
+                    prediction_count = await AsyncLottoRepository.execute_raw_query(
+                        "SELECT COUNT(*) as count FROM recommand WHERE next_no = %s",
+                        (current_draw_no,)
+                    )
+                    prediction_exists = prediction_count[0]['count'] > 0 if prediction_count else False
+                    
+                    if not prediction_exists:
+                        logger.warning(f"[{job_name}] {current_draw_no}회차 예측 결과가 없습니다. 다음 회차 예측 생성 시도")
+                        
+                        # 예측 실행을 위한 다음 회차 번호 (현재 + 1)
+                        next_draw_no = current_draw_no + 1
+                        
+                        # 예측 생성 실행 (바로 다음 회차)
+                        try:
+                            await self.run_prediction_now(count=5)
+                            logger.info(f"[{job_name}] {next_draw_no}회차 예측 자동 생성 성공")
+                        except Exception as pred_error:
+                            logger.error(f"[{job_name}] 자동 예측 생성 실패: {pred_error}")
             else:
                 logger.warning(f"[{job_name}] 로또 당첨 정보 업데이트 실패 (아직 발표되지 않았거나 API 오류)")
 
