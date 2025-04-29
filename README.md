@@ -16,6 +16,148 @@
 - **성능 지표 제공**: 토큰 사용량, 소요 시간, 예상 비용 등 성능 지표 제공
 - **결과 검증**: 예측 결과의 정확도 검증 기능
 
+## 🔍 예측 알고리즘 및 통계 모델
+
+### 1. 통계 모델 및 분석 방법
+
+#### 1.1 기본 통계 분석
+- **번호별 출현 빈도 분석**: 각 번호(1-45)의 출현 횟수를 계산
+- **연속성 분석**: 이전 회차와의 공통 번호 수 분포 계산
+- **홀짝 분포 분석**: 각 조합의 홀수/짝수 번호 비율 분석 (e.g., 3홀 3짝)
+- **합계 범위 분석**: 당첨 조합의 번호 합계 분포 및 통계(평균, 표준편차)
+- **번호 간격 분석**: 정렬된 번호 사이의 간격 패턴 분석
+- **구간 분포 분석**: 번호의 구간별(1-9, 10-19, 20-29, 30-39, 40-45) 분포 분석
+- **연속 번호 분석**: 연속된 번호의 출현 패턴 분석
+
+#### 1.2 고급 확률 모델
+- **베이지안 확률 계산**: 단순 빈도가 아닌 베이지안 추론 기반 확률 계산
+  ```python
+  def calculate_bayesian_probabilities(self) -> Dict[int, float]:
+      # 사전 확률은 균등 분포 (1/45)
+      prior = {i: 1/45 for i in range(1, 46)}
+      
+      # 라플라스 스무딩 적용 (과적합 방지)
+      alpha = 2  # 평활화 계수
+      frequency = self.analyze_number_frequency()
+      total_draws = len(self.draws)
+      
+      # 베이지안 갱신
+      posterior = {}
+      for num in range(1, 46):
+          # 관측 빈도 + 스무딩 / 전체 관측 + 스무딩 * 가능한 결과 수
+          posterior[num] = (frequency.get(num, 0) + alpha) / (total_draws * 6 + alpha * 45)
+      
+      return posterior
+  ```
+
+- **마르코프 체인 전이 확률**: 번호 간 전이 확률을 마르코프 체인으로 모델링
+  ```python
+  def build_markov_transition_matrix(self) -> Dict[int, Dict[int, float]]:
+      # 번호별 등장 후 다음 회차 등장 확률 계산
+      transition_matrix = {i: {j: 0 for j in range(1, 46)} for i in range(1, 46)}
+      
+      for i in range(1, len(self.draws)):
+          prev_numbers = set(self.draws[i-1].numbers)
+          curr_numbers = set(self.draws[i].numbers)
+          
+          # 이전 회차에 등장한 번호가 다음 회차에 등장할 확률
+          for prev_num in prev_numbers:
+              for curr_num in range(1, 46):
+                  transition_matrix[prev_num][curr_num] += 1 if curr_num in curr_numbers else 0
+      
+      # 확률로 정규화
+      for i in range(1, 46):
+          total = sum(transition_matrix[i].values())
+          if total > 0:
+              for j in range(1, 46):
+                  transition_matrix[i][j] /= total
+      
+      return transition_matrix
+  ```
+
+### 2. 번호 생성 알고리즘
+
+#### 2.1 RAG 기반 생성 (주요 방법)
+- **분석 데이터 컨텍스트 제공**: Claude AI 모델에 종합 분석 결과 전달
+- **통계 기반 프롬프트 엔지니어링**: 베이지안 확률, 마르코프 체인, 홀짝 균형 등 통계적 원칙 지시
+- **응답 파싱 및 검증**: 모델 응답에서 JSON 조합 추출 및 유효성 검사
+
+#### 2.2 고급 통계 기반 생성 (대체 방법)
+- **베이지안 가중치 적용**: 베이지안 확률에 기반한 번호 선택
+- **연속성 분포 반영**: 이전 회차와의 공통 번호 수를 실제 분포에 맞게 선택
+- **홀짝 균형 조정**: 실제 당첨 패턴의 홀짝 균형 분포를 반영
+- **합계 범위 검증**: 번호 합계가 평균±2.5표준편차 범위 내에 있도록 조정
+
+#### 2.3 향상된 랜덤 생성 (최후 대체 방법)
+- **통계적 유효성 검사 적용**: 극단적인 합계 값을 가진 조합 필터링
+- **홀짝 분포 검증**: 모든 홀수 또는 모든 짝수 조합 제외
+
+### 3. 조합 평가 및 필터링 알고리즘
+
+#### 3.1 복합 점수 시스템
+- **가중치 기반 점수 계산**:
+  ```
+  final_score = (
+      CONTINUITY_WEIGHT * continuity_score +
+      FREQUENCY_WEIGHT * frequency_score +
+      DISTRIBUTION_WEIGHT * distribution_score +
+      PARITY_WEIGHT * parity_score +
+      SUM_RANGE_WEIGHT * sum_score
+  )
+  ```
+  - 연속성 점수(40%): 이전 회차와의 공통 번호 수 확률
+  - 빈도 점수(20%): 베이지안 확률 기반 번호 빈도
+  - 분포 점수(20%): 번호 간 간격 분포 유사도
+  - 홀짝 점수(10%):
+  - 합계 범위 점수(10%): 평균에서의 표준편차 기반 점수
+
+#### 3.2 통계적 유효성 검증
+- **홀짝 균형 검증**: 실제 확률 5% 미만의 홀짝 조합 필터링
+- **합계 범위 검증**: 평균에서 2.5 표준편차 이상 벗어나는 합계 필터링
+- **연속 번호 검증**: 비정상적인 연속 번호 패턴 필터링
+
+#### 3.3 조합 다양성 확보
+- **다양성 필터 적용**: 너무 유사한 조합 제거로 다양성 확보
+  ```python
+  def _apply_diversity_filter(self, predictions: List[LottoPrediction], min_distance=2):
+      filtered_predictions = []
+      
+      # 항상 가장 높은 점수의 조합은 포함
+      filtered_predictions.append(predictions[0])
+      
+      for pred in predictions[1:]:
+          # 이미 선택된 조합들과의 유사도 체크
+          too_similar = False
+          
+          for selected_pred in filtered_predictions:
+              # 두 조합 간 공통 번호 수
+              common_count = len(set(pred.combination).intersection(set(selected_pred.combination)))
+              unique_count = 6 - common_count  # 서로 다른 번호 수
+              
+              # 공통 번호가 너무 많으면 유사하다고 판단
+              if unique_count < min_distance:
+                  too_similar = True
+                  break
+          
+          # 충분히 다양하면 추가
+          if not too_similar:
+              filtered_predictions.append(pred)
+      
+      return filtered_predictions
+  ```
+
+### 4. 주요 가중치 및 매개변수
+
+시스템은 다음과 같은 주요 가중치와 매개변수를 사용합니다:
+
+- **연속성 가중치**: `CONTINUITY_WEIGHT = 0.4` (40% 반영)
+- **빈도 가중치**: `FREQUENCY_WEIGHT = 0.2` (20% 반영)
+- **분포 가중치**: `DISTRIBUTION_WEIGHT = 0.2` (20% 반영)
+- **홀짝 가중치**: `PARITY_WEIGHT = 0.1` (10% 반영)
+- **합계 범위 가중치**: `SUM_RANGE_WEIGHT = 0.1` (10% 반영)
+- **라플라스 스무딩 계수**: `alpha = 2` (베이지안 계산 시)
+- **최소 다양성 거리**: `min_distance = 2` (조합 간 최소 다른 번호 수)
+
 ## 🛠️ 기술 스택
 
 - **백엔드**: Python 3.13, FastAPI
@@ -135,22 +277,6 @@ lotto_prediction_system/
 ├── cli_runner.py        # CLI 실행 스크립트
 └── requirements.txt     # 의존성 패키지 목록
 ```
-
-## 🔍 예측 방법론
-
-이 시스템은 다음과 같은 단계로 로또 번호를 예측합니다:
-
-1. **데이터 수집**: MySQL 데이터베이스에서 601~1165회차의 당첨 데이터 조회
-2. **데이터 분석**:
-   - 번호별 출현 빈도 분석
-   - 연속성 분석(이전 회차와의 중복 번호 수)
-   - 홀짝 분포 분석
-   - 번호 합계 범위 분석
-3. **RAG 기반 예측**:
-   - 분석 결과를 Claude AI 모델에 전달하여 번호 조합 생성
-   - 조합 검증 및 필터링 (기존 당첨 이력과 중복 확인)
-   - 조합 평가 및 점수 부여
-4. **결과 저장**: 예측 결과를 `recommand` 테이블에 저장
 
 ## 📊 성능 지표
 

@@ -32,8 +32,12 @@ NUMBERS_PER_DRAW = 6
 
 # 예측 설정
 DEFAULT_PREDICTION_COUNT = 5
-CONTINUITY_WEIGHT = 0.7
-FREQUENCY_WEIGHT = 0.3
+# 개선된 가중치 시스템
+CONTINUITY_WEIGHT = 0.4    # 연속성에 40% 가중치
+FREQUENCY_WEIGHT = 0.2     # 빈도에 20% 가중치
+DISTRIBUTION_WEIGHT = 0.2  # 번호 분포에 20% 가중치
+PARITY_WEIGHT = 0.1        # 홀짝 균형에 10% 가중치
+SUM_RANGE_WEIGHT = 0.1     # 합계 범위에 10% 가중치
 
 # 캐시 설정
 ENABLE_CACHE = os.getenv("ENABLE_CACHE", "true").lower() == "true"

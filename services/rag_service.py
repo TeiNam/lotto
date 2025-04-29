@@ -264,37 +264,60 @@ class RAGService:
             return await self._random_combination_generator(num_combinations)
 
     async def _random_combination_generator(self, num_combinations: int) -> List[List[int]]:
-        """완전 랜덤 조합 생성 전략"""
+        """개선된 랜덤 조합 생성 전략"""
         import random
 
         combinations = []
-        for _ in range(num_combinations):
+        max_attempts = num_combinations * 5  # 최대 시도 횟수 제한
+        attempts = 0
+        
+        while len(combinations) < num_combinations and attempts < max_attempts:
+            attempts += 1
+            
+            # 기본 랜덤 생성
             combination = sorted(random.sample(range(1, 46), 6))
+            
+            # 간단한 통계적 유효성 검사 추가
+            total_sum = sum(combination)
+            if total_sum < 90 or total_sum > 200:  # 극단적인 합계는 제외
+                continue
+                
+            # 구간 분포 검사는 제거 - 실제 로또에서는 특정 구간에 번호가 몰리는 경우가 많음
+                
+            # 중복 조합 방지
             if combination not in combinations:
                 combinations.append(combination)
 
-        logger.info(f"랜덤 대체 전략으로 {len(combinations)}개 조합 생성")
+        logger.info(f"향상된 랜덤 전략으로 {len(combinations)}개 조합 생성 (시도: {attempts})")
         return combinations
 
     # 나머지 메서드는 그대로 유지...
 
     def _create_prompt(self, analysis_json: str, num_combinations: int) -> str:
-        """RAG 프롬프트 생성"""
+        """베이지안 확률, 마르코프 체인 등을 고려한 고급 RAG 프롬프트 생성"""
         return f"""
-        다음은 로또 번호(1~45 사이 숫자 6개) 예측을 위한 역대 당첨 데이터 분석 결과입니다:
+        당신은 통계학과 확률 이론을 완벽하게 이해하는 로또 번호 예측 전문가입니다. 
+        다음은 로또 번호(1~45 사이 숫자 6개) 예측을 위한 역대 당첨 데이터 종합 분석 결과입니다:
 
         {analysis_json}
 
-        위 데이터를 기반으로, 다음 회차에 나올 것 같은 로또 번호 조합 {num_combinations}개를 생성해주세요.
-        각 조합은 1~45 사이의 숫자 6개로 구성되어야 하며, 오름차순으로 정렬해주세요.
-        이전에 나왔던 조합과 동일한 조합은 제외합니다.
-        이전 회차 번호와의 연속성(중복되는 번호의 수)을 고려해주세요.
+        위 데이터를 베이지안 확률과 마르코프 체인 관점에서 철저히 분석하여, 통계학적으로 가장 유의미한 
+        번호 조합 {num_combinations}개를 생성해주세요. 각 조합을 생성할 때 다음 고급 통계 원칙을 적용하세요:
 
-        특히 다음 사항을 고려해주세요:
-        1. 번호 빈도 분석을 참고하여 자주 나오는 번호와 드물게 나오는 번호의 균형을 맞춰주세요.
-        2. 홀수/짝수 분포를 고려해주세요.
-        3. 번호 합계 범위를 고려해주세요.
-        4. 이전 회차와의 연속성 분포를 반영해주세요.
+        1. 베이지안 확률: 단순 빈도가 아닌 베이지안 확률을 우선 고려하세요.
+        2. 마르코프 전이: 이전 회차 번호가 다음 회차에 미치는 영향을 고려하세요.
+        3. 홀짝 분포: 실제 당첨 내역의 홀짝 분포 확률을 따르도록 하세요.
+        4. 합계 범위: 번호 합계가 평균±2표준편차 범위 내에 있도록 하세요.
+        5. 구간 분산: 번호들이 특정 구간에 몰리는 것은 허용됩니다. 실제 로또에서는 구간별로 번호가 골고루 분포되지 않고 몰리는 경우가 많습니다.
+        6. 연속 번호: 연속된 번호의 출현 빈도를 실제 분포와 일치시키세요.
+        7. 번호 간 간격: 번호 간 간격이 지나치게 균일하거나 불균일하지 않도록 하세요.
+
+        특히 다음 오류를 피해주세요:
+        - 극단적 합계: 평균에서 2표준편차 이상 벗어나는 합계
+        - 비현실적 홀짝: 실제 확률이 5% 미만인 홀짝 조합
+        - 과도한 연속 번호: 4개 이상의 연속된 번호
+
+        각 조합은 의도적으로 다양성을 확보하도록 설계하세요. 즉, 선정된 조합들 간에 중복되는 번호가 최소화되도록 하세요.
 
         응답은 다음과 같은 JSON 형식으로 해주세요:
         [
@@ -302,6 +325,8 @@ class RAGService:
             [n1, n2, n3, n4, n5, n6],
             ...
         ]
+        
+        각 조합의 숫자는 반드시 오름차순으로 정렬하고, 이전에 당첨된 조합과 동일한 조합은 제외하세요.
         """
 
     async def _extract_json_combinations(self, content: str) -> List[List[int]]:
