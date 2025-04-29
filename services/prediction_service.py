@@ -6,7 +6,7 @@ from models.prediction import LottoPrediction
 from services.data_service import AsyncDataService
 from services.analysis_service import AnalysisService
 from services.rag_service import RAGService
-from config.settings import CONTINUITY_WEIGHT, FREQUENCY_WEIGHT
+from config.settings import CONTINUITY_WEIGHT, FREQUENCY_WEIGHT, DISTRIBUTION_WEIGHT, PARITY_WEIGHT, SUM_RANGE_WEIGHT
 from utils.exceptions import PredictionGenerationError, ValidationError, DataLoadError, AnalysisError, \
     LottoPredictionError
 
@@ -123,6 +123,33 @@ class AsyncPredictionService:
             last_numbers: List[int],
             analysis_results: Dict[str, Any]
     ) -> List[LottoPrediction]:
+        """점수 계산만 수행하는 함수 (필터링 없음)"""
+        # 연속성 확률 분포
+        continuity_dist = analysis_results.get("continuity_distribution", {})
+        total_draws = analysis_results.get("total_draws", 1)
+        number_frequency = analysis_results.get("number_frequency", {})
+
+        # 각 연속성 수준의 확률 계산
+        continuity_probs = {
+            k: v / total_draws
+            for k, v in continuity_dist.items()
+        }
+
+        # 점수 계산 - 병렬 처리
+        tasks = []
+        for combo in combinations:
+            tasks.append(self._score_combination(
+                combo, last_numbers, continuity_probs, number_frequency
+            ))
+
+        scored_combinations = await asyncio.gather(*tasks)
+
+        # None 값 필터링 후 정렬
+        valid_combinations = [combo for combo in scored_combinations if combo is not None]
+        valid_combinations.sort(key=lambda x: x.score, reverse=True)
+
+        return valid_combinations
+
     def _apply_diversity_filter(self, predictions: List[LottoPrediction], min_distance=2, max_similar_pairs=10) -> List[LottoPrediction]:
         """조합 간 다양성 보장 필터"""
         if not predictions:
@@ -163,7 +190,6 @@ class AsyncPredictionService:
     async def monte_carlo_validation(self, combinations: List[List[int]], analysis_results: Dict[str, Any], num_simulations=1000) -> List[float]:
         """몬테카를로 시뮬레이션으로 생성된 조합 검증"""
         import random
-        import numpy as np
         
         # 실제 당첨 번호 분포 특성
         actual_parity_dist = analysis_results.get("parity_distribution", {})
@@ -206,38 +232,13 @@ class AsyncPredictionService:
         normalized_scores = [score / max_score for score in simulation_scores]
         
         return normalized_scores
-        # 연속성 확률 분포
-        continuity_dist = analysis_results.get("continuity_distribution", {})
-        total_draws = analysis_results.get("total_draws", 1)
-        number_frequency = analysis_results.get("number_frequency", {})
-
-        # 각 연속성 수준의 확률 계산
-        continuity_probs = {
-            k: v / total_draws
-            for k, v in continuity_dist.items()
-        }
-
-        # 점수 계산 - 병렬 처리
-        tasks = []
-        for combo in combinations:
-            tasks.append(self._score_combination(
-                combo, last_numbers, continuity_probs, number_frequency
-            ))
-
-        scored_combinations = await asyncio.gather(*tasks)
-
-        # None 값 필터링 후 정렬
-        valid_combinations = [combo for combo in scored_combinations if combo is not None]
-        valid_combinations.sort(key=lambda x: x.score, reverse=True)
-
-        return valid_combinations
 
     async def _filter_combinations(
             self,
             combinations: List[List[int]],
             last_numbers: List[int],
             analysis_results: Dict[str, Any]
-    ) -> List[LottoPrediction]:]:
+    ) -> List[LottoPrediction]:
         """생성된 조합 필터링 및 점수 부여 (비동기)"""
         # 연속성 확률 분포
         continuity_dist = analysis_results.get("continuity_distribution", {})
