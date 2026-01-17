@@ -120,6 +120,31 @@ async def root():
     }
 
 
+@app.get("/health", tags=["health"])
+async def health_check():
+    """헬스체크 엔드포인트 (Docker/K8s용)"""
+    try:
+        # 데이터베이스 연결 확인
+        pool = await AsyncDatabaseConnector.get_pool()
+        async with pool.acquire() as conn:
+            async with conn.cursor() as cursor:
+                await cursor.execute("SELECT 1")
+                await cursor.fetchone()
+        
+        return {
+            "status": "healthy",
+            "database": "connected",
+            "service": "lotto-prediction-api"
+        }
+    except Exception as e:
+        logger.error(f"헬스체크 실패: {e}")
+        return {
+            "status": "unhealthy",
+            "database": "disconnected",
+            "error": str(e)
+        }
+
+
 if __name__ == "__main__":
     import uvicorn
 

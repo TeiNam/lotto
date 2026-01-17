@@ -1,0 +1,85 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info
+dist
+build
+.eggs
+.pytest_cache
+.hypothesis
+htmlcov
+.coverage
+.coverage.*
+.tox
+.nox
+
+# Virtual environments
+.venv
+venv
+env
+ENV
+
+# IDE
+.idea
+.vscode
+.kiro
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documentation
+*.md
+docs/
+README*
+LICENSE
+
+# Tests
+tests/
+test_*.py
+*_test.py
+
+# Docker
+docker-compose*.yml
+.dockerignore
+Dockerfile*
+
+# CI/CD
+.github/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Coverage reports
+htmlcov/
+.coverage
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# CSV data files (if not needed in container)
+*.csv

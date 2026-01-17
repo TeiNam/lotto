@@ -1,5 +1,5 @@
 #!/bin/bash
-# docker/docker-entrypoint.sh
+# API 서버용 entrypoint
 
 set -e
 
@@ -11,14 +11,12 @@ until nc -z -v -w30 $DB_HOST $DB_PORT; do
 done
 echo "데이터베이스 연결 준비 완료!"
 
-# 환경 변수 확인
-if [ -z "$ANTHROPIC_API_KEY" ]; then
-  echo "ANTHROPIC_API_KEY가 설정되지 않았습니다."
-  exit 1
+# 환경 변수 확인 (선택적)
+if [ -z "$TELEGRAM_BOT_TOKEN" ]; then
+  echo "⚠️  TELEGRAM_BOT_TOKEN이 설정되지 않았습니다. (알림 기능 비활성화)"
 fi
 
-# 필요한 디렉토리 생성
-mkdir -p logs
+echo "✅ API 서버 시작 준비 완료"
 
 # 명령어 실행
 exec "$@"
