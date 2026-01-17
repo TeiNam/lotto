@@ -2,10 +2,12 @@
 
 ## 📦 개요
 
-이 프로젝트는 Docker를 사용하여 다음 서비스를 컨테이너화합니다:
-- **API 서버**: FastAPI 기반 REST API
+이 프로젝트는 Docker를 사용하여 다음 서비스를 **하나의 컨테이너**에서 실행합니다:
+- **API 서버**: FastAPI 기반 REST API (포트 8000)
 - **Telegram Bot**: 자동화된 예측 생성 및 알림
-- **MySQL 데이터베이스**: 당첨 번호 및 예측 데이터 저장
+- **MySQL 데이터베이스**: 당첨 번호 및 예측 데이터 저장 (별도 컨테이너)
+
+**Supervisor**를 사용하여 API와 Bot을 하나의 컨테이너에서 동시에 관리합니다.
 
 ## 🚀 빠른 시작
 
@@ -49,38 +51,56 @@ docker-compose logs -f db
 - **API 문서**: http://localhost:8000/docs
 - **헬스체크**: http://localhost:8000/health
 - **MySQL**: localhost:3306
+- **Telegram Bot**: 자동 실행 (같은 컨테이너 내)
+
+### 4. 로그 확인
+
+```bash
+# 전체 로그 (API + Bot)
+docker-compose logs -f app
+
+# Supervisor 로그
+docker-compose exec app tail -f /var/log/supervisor/supervisord.log
+
+# API 로그만
+docker-compose exec app tail -f /var/log/supervisor/api.out.log
+
+# Bot 로그만
+docker-compose exec app tail -f /var/log/supervisor/bot.out.log
+```
 
 ## 🏗️ 이미지 빌드
 
-### 개별 이미지 빌드
+### 로컬 빌드
 
 ```bash
-# API 서버 이미지
-docker build -f docker/Dockerfile -t lotto-api:latest .
+# 통합 이미지 빌드
+docker build -f docker/Dockerfile -t lotto:latest .
 
-# Telegram Bot 이미지
-docker build -f docker/Dockerfile.bot -t lotto-bot:latest .
+# 실행
+docker run -d \
+  --name lotto-app \
+  -p 8000:8000 \
+  -e DB_HOST=host.docker.internal \
+  -e DB_USER=lotto \
+  -e DB_PASSWORD=password \
+  -e TELEGRAM_BOT_TOKEN=your_token \
+  -e TELEGRAM_CHAT_ID=your_chat_id \
+  lotto:latest
 ```
 
-### Multi-platform 빌드 (ARM64/AMD64)
+### GitHub Container Registry에서 Pull
 
 ```bash
-# Buildx 설정
-docker buildx create --use
+# 최신 이미지 다운로드
+docker pull ghcr.io/teinam/lotto:latest
 
-# API 서버 (multi-platform)
-docker buildx build \
-  --platform linux/amd64,linux/arm64 \
-  -f docker/Dockerfile \
-  -t lotto-api:latest \
-  --push .
-
-# Telegram Bot (multi-platform)
-docker buildx build \
-  --platform linux/amd64,linux/arm64 \
-  -f docker/Dockerfile.bot \
-  -t lotto-bot:latest \
-  --push .
+# 실행
+docker run -d \
+  --name lotto-app \
+  -p 8000:8000 \
+  -e DB_HOST=host.docker.internal \
+  ghcr.io/teinam/lotto:latest
 ```
 
 ## 📋 Docker Compose 명령어

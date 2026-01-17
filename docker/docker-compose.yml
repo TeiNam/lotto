@@ -1,13 +1,13 @@
-# docker-compose.yml
+# docker-compose.yml - 통합 이미지 사용
 version: '3.8'
 
 services:
-  # API 서버
-  api:
+  # 통합 서비스 (API + Bot)
+  app:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    container_name: lotto-api
+    container_name: lotto-app
     restart: unless-stopped
     ports:
       - "8000:8000"
@@ -30,33 +30,9 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
-
-  # Telegram Bot
-  bot:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile.bot
-    container_name: lotto-bot
-    restart: unless-stopped
-    environment:
-      - DB_HOST=db
-      - DB_USER=${DB_USER:-lotto}
-      - DB_PASSWORD=${DB_PASSWORD:-lotto_password}
-      - DB_NAME=${DB_NAME:-lotto}
-      - DB_PORT=3306
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
-    depends_on:
-      db:
-        condition: service_healthy
-    networks:
-      - lotto-network
-    healthcheck:
-      test: ["CMD", "pgrep", "-f", "telegram_bot_handler"]
-      interval: 60s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
+    volumes:
+      # 로그 볼륨 (선택사항)
+      - app_logs:/var/log/supervisor
 
   # MySQL 데이터베이스
   db:
@@ -93,4 +69,6 @@ networks:
 
 volumes:
   mysql_data:
+    driver: local
+  app_logs:
     driver: local

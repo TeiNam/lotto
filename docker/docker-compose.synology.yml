@@ -1,11 +1,11 @@
-# Synology NAS용 Docker Compose 설정
+# Synology NAS용 Docker Compose 설정 - 통합 이미지
 version: '3.8'
 
 services:
-  # API 서버
-  api:
-    image: ghcr.io/teinam/lotto-api:latest
-    container_name: lotto-api
+  # 통합 서비스 (API + Bot)
+  app:
+    image: ghcr.io/teinam/lotto:latest
+    container_name: lotto-app
     restart: unless-stopped
     ports:
       - "8000:8000"
@@ -27,30 +27,9 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
-
-  # Telegram Bot
-  bot:
-    image: ghcr.io/teinam/lotto-bot:latest
-    container_name: lotto-bot
-    restart: unless-stopped
-    environment:
-      - DB_HOST=db
-      - DB_USER=${DB_USER:-lotto}
-      - DB_PASSWORD=${DB_PASSWORD:-lotto_password}
-      - DB_NAME=${DB_NAME:-lotto}
-      - DB_PORT=3306
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
-    depends_on:
-      - db
-    networks:
-      - lotto-network
-    healthcheck:
-      test: ["CMD", "pgrep", "-f", "telegram_bot_handler"]
-      interval: 60s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
+    volumes:
+      # Synology NAS 경로로 로그 저장
+      - /volume1/docker/lotto/logs:/var/log/supervisor
 
   # MySQL 데이터베이스
   db:
@@ -66,7 +45,7 @@ services:
       - MYSQL_PASSWORD=${DB_PASSWORD:-lotto_password}
       - TZ=Asia/Seoul
     volumes:
-      # Synology NAS 경로로 수정
+      # Synology NAS 경로로 데이터 저장
       - /volume1/docker/lotto/mysql:/var/lib/mysql
       - ./mysql/init:/docker-entrypoint-initdb.d
     networks:
@@ -85,5 +64,3 @@ services:
 networks:
   lotto-network:
     driver: bridge
-
-# Synology NAS에서는 volumes 섹션 생략 (직접 경로 지정)

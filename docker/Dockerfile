@@ -1,10 +1,9 @@
 # Multi-stage build for optimized image size
 FROM python:3.13.2-slim AS builder
 
-# 작업 디렉토리 설정
 WORKDIR /app
 
-# 시스템 패키지 설치 (빌드용)
+# 빌드 의존성 설치
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && apt-get clean \
@@ -22,15 +21,15 @@ ENV PATH="/venv/bin:$PATH"
 
 COPY requirements.txt .
 RUN pip install --upgrade pip && \
-    pip install -r requirements.txt
+    pip install -r requirements.txt && \
+    pip install supervisor
 
 # Runtime stage
 FROM python:3.13.2-slim
 
-# 작업 디렉토리 설정
 WORKDIR /app
 
-# 런타임 패키지만 설치
+# 런타임 패키지 설치
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     netcat-traditional \
@@ -52,7 +51,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 COPY --from=builder /venv /venv
 ENV PATH="/venv/bin:$PATH"
 
-# 소스 코드 복사 (최적화된 레이어 캐싱)
+# 소스 코드 복사
 COPY api/ ./api/
 COPY config/ ./config/
 COPY database/ ./database/
@@ -62,17 +61,22 @@ COPY utils/ ./utils/
 COPY telegram_bot_handler.py .
 COPY lotto_oot_crawler.py .
 
+# Supervisor 설정 파일 복사
+COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
 # 실행 스크립트 복사 및 권한 설정
 COPY docker/docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
 
 # 로그 디렉토리 생성
-RUN mkdir -p logs
+RUN mkdir -p /var/log/supervisor logs
 
-# 헬스체크 추가
+# 헬스체크 (API 서버 확인)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-# 실행할 기본 명령어
+# 포트 노출
+EXPOSE 8000
+
 ENTRYPOINT ["/docker-entrypoint.sh"]
-CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["/venv/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
