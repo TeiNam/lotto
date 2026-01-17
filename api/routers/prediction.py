@@ -1,4 +1,4 @@
-# api/routers/prediction.py - 오류 처리 개선
+# api/routers/prediction.py - 단순화된 예측 서비스 통합
 import asyncio
 import logging
 import traceback
@@ -7,14 +7,26 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from api.dependencies import get_async_data_service, get_async_prediction_service
-from api.schemas.prediction import PredictionRequest, PredictionResponse, PredictionResult, PerformanceMetrics, \
-    DrawResultResponse, DrawResultRequest
+from api.dependencies import (
+    get_async_data_service, 
+    get_async_prediction_service,
+    get_simplified_prediction_service,
+    get_telegram_notifier
+)
+from api.schemas.prediction import (
+    PredictionRequest, 
+    PredictionResponse, 
+    PredictionResult, 
+    PerformanceMetrics,
+    DrawResultResponse, 
+    DrawResultRequest
+)
 from database.connector import AsyncDatabaseConnector
 from database.repositories.lotto_repository import AsyncLottoRepository
-from services.analysis_service import AnalysisService
 from services.data_service import AsyncDataService
 from services.prediction_service import AsyncPredictionService
+from services.simplified_prediction_service import SimplifiedPredictionService
+from services.telegram_notifier import TelegramNotifier
 from utils.exceptions import (
     LottoPredictionError, DatabaseError, DataLoadError,
     AnalysisError, PredictionGenerationError, APIServiceError, ValidationError
@@ -22,6 +34,183 @@ from utils.exceptions import (
 
 router = APIRouter()
 logger = logging.getLogger("lotto_prediction")
+
+
+@router.post("/predict/simple", response_model=PredictionResponse, status_code=status.HTTP_200_OK)
+async def predict_lotto_numbers_simple(
+        request: PredictionRequest,
+        data_service: AsyncDataService = Depends(get_async_data_service),
+        prediction_service: SimplifiedPredictionService = Depends(get_simplified_prediction_service),
+        telegram_notifier: TelegramNotifier = Depends(get_telegram_notifier)
+):
+    """
+    단순화된 로또 번호 예측 API - 완전 랜덤 생성 방식
+    
+    복잡한 통계 분석 없이 완전 랜덤 방식으로 번호를 생성합니다.
+    과거 당첨 번호와의 중복은 자동으로 방지됩니다.
+    
+    플로우:
+    1. 예측 생성 (SimplifiedPredictionService)
+    2. 데이터베이스 저장
+    3. Telegram 알림 전송 (실패해도 예측 결과는 반환)
+    """
+    start_time = time.time()
+    logger.info(f"단순화된 로또 예측 시작 (요청 예측 개수: {request.count})")
+    
+    try:
+        # 1. 최신 회차 정보 가져오기
+        try:
+            last_draw_data = await AsyncLottoRepository.get_last_draw()
+            if not last_draw_data:
+                raise DataLoadError("최근 회차 데이터를 찾을 수 없습니다")
+            
+            last_draw_no = last_draw_data["no"]
+            last_draw_numbers = [
+                last_draw_data["num1"], last_draw_data["num2"], 
+                last_draw_data["num3"], last_draw_data["num4"],
+                last_draw_data["num5"], last_draw_data["num6"]
+            ]
+            last_draw_date = last_draw_data["draw_date"]
+            
+            logger.info(f"최신 회차: {last_draw_no}, 당첨번호: {last_draw_numbers}")
+            
+        except DatabaseError as e:
+            logger.error(f"데이터베이스 오류: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="데이터베이스 서비스를 일시적으로 사용할 수 없습니다."
+            )
+        
+        # 2. 예측 생성
+        logger.info(f"{request.count}개 예측 조합 생성 중...")
+        try:
+            predictions = await prediction_service.generate_predictions(
+                num_predictions=request.count
+            )
+            
+            if not predictions:
+                raise PredictionGenerationError("예측 결과가 비어있습니다")
+            
+            logger.info(f"{len(predictions)}개 예측 조합 생성 완료")
+            
+        except ValidationError as e:
+            logger.error(f"입력 유효성 검증 실패: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(e)
+            )
+        except PredictionGenerationError as e:
+            logger.error(f"예측 생성 오류: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="예측 생성에 실패했습니다"
+            )
+        
+        # 3. 결과 준비
+        prediction_results = [
+            PredictionResult(
+                combination=pred.combination,
+                score=pred.score,
+                common_with_last=pred.common_with_last
+            )
+            for pred in predictions
+        ]
+        
+        # 화면에 예측 번호 출력
+        logger.info("생성된 예측 번호 조합:")
+        for i, pred in enumerate(predictions, 1):
+            sorted_numbers = sorted(pred.combination)
+            numbers_str = ", ".join(str(n) for n in sorted_numbers)
+            logger.info(f"조합 {i}: [{numbers_str}]")
+        
+        # 4. 데이터베이스 저장
+        next_draw_no = last_draw_no + 1
+        
+        try:
+            success_count = 0
+            for pred in predictions:
+                success = await AsyncLottoRepository.save_recommendation(
+                    numbers=pred.combination,
+                    next_no=next_draw_no
+                )
+                if success:
+                    success_count += 1
+            
+            logger.info(f"예측 결과 {success_count}/{len(predictions)}개 저장 완료 (예측 회차: {next_draw_no})")
+            
+            if success_count < len(predictions):
+                logger.warning(f"{len(predictions) - success_count}개 예측 저장 실패")
+                
+        except Exception as e:
+            logger.warning(f"예측 결과 저장 중 오류 발생: {str(e)}")
+            # 저장 실패는 API 응답에 영향을 주지 않음 (Graceful degradation)
+        
+        # 5. Telegram 알림 전송 (실패해도 예측 결과는 반환)
+        notification_sent = False
+        try:
+            # 예측 번호만 추출 (LottoPrediction -> List[int])
+            prediction_numbers = [pred.combination for pred in predictions]
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            
+            notification_sent = await telegram_notifier.send_predictions(
+                predictions=prediction_numbers,
+                timestamp=timestamp
+            )
+            
+            if notification_sent:
+                logger.info("Telegram 알림 전송 성공")
+            else:
+                logger.warning("Telegram 알림 전송 실패 (예측 결과는 정상 반환)")
+                
+        except Exception as e:
+            logger.error(f"Telegram 알림 전송 중 오류: {e}")
+            # 알림 실패해도 예측 결과는 반환 (Graceful degradation)
+        
+        # 6. 성능 지표 계산
+        elapsed_time = time.time() - start_time
+        performance_metrics = PerformanceMetrics(
+            elapsed_time=elapsed_time,
+            total_tokens=0,  # 단순화된 버전에서는 AI API 사용 안 함
+            prompt_tokens=0,
+            completion_tokens=0,
+            api_calls=0,
+            estimated_cost=0.0
+        )
+        
+        logger.info(f"예측 완료: 소요 시간 {elapsed_time:.2f}초")
+        
+        # 7. 응답 생성
+        response = PredictionResponse(
+            predictions=prediction_results,
+            last_draw={
+                "draw_no": last_draw_no,
+                "numbers": last_draw_numbers,
+                "draw_date": last_draw_date.isoformat() if hasattr(last_draw_date, 'isoformat') else str(last_draw_date)
+            },
+            next_draw_no=next_draw_no,
+            analysis_summary={
+                "method": "random",
+                "description": "완전 랜덤 생성 방식 (통계 분석 없음)",
+                "notification_sent": notification_sent
+            },
+            performance_metrics=performance_metrics
+        )
+        
+        logger.info("단순화된 로또 예측 프로세스 완료")
+        return response
+        
+    except HTTPException:
+        # 이미 처리된 HTTP 예외는 그대로 전달
+        raise
+        
+    except Exception as e:
+        # 예상치 못한 오류
+        logger.exception(f"예상치 못한 오류 발생: {str(e)}")
+        logger.error(f"스택 트레이스: {traceback.format_exc()}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="내부 서버 오류가 발생했습니다. 관리자에게 문의하세요."
+        )
 
 
 @router.post("/predict", response_model=PredictionResponse, status_code=status.HTTP_200_OK)
@@ -104,8 +293,10 @@ async def predict_lotto_numbers(
         # 2. 데이터 분석
         logger.info("당첨 데이터 분석 중...")
         try:
-            analysis_service = AnalysisService(data_service.get_all_draws())
-            analysis_results = analysis_service.get_comprehensive_analysis()
+            # TODO: AnalysisService 제거됨 - SimplifiedPredictionService로 대체 예정
+            # analysis_service = AnalysisService(data_service.get_all_draws())
+            # analysis_results = analysis_service.get_comprehensive_analysis()
+            analysis_results = {}  # 임시로 빈 딕셔너리 사용
 
             if not analysis_results:
                 raise AnalysisError("데이터 분석 결과가 비어있습니다")

@@ -1,5 +1,6 @@
 # database/repositories/lotto_repository.py
 import logging
+import aiomysql
 from typing import List, Dict, Any, Optional
 
 from database.connector import AsyncDatabaseConnector
@@ -180,7 +181,7 @@ class AsyncLottoRepository:
             pool = await AsyncDatabaseConnector.get_pool()
             
             async with pool.acquire() as conn:
-                async with conn.cursor() as cursor:
+                async with conn.cursor(aiomysql.DictCursor) as cursor:
                     # 먼저 전체 회차 목록 조회 (디버깅용)
                     check_query = "SELECT DISTINCT next_no FROM recommand ORDER BY next_no"
                     await cursor.execute(check_query)

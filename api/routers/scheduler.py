@@ -8,8 +8,9 @@ from api.dependencies import get_async_data_service, get_async_prediction_servic
 from services.data_service import AsyncDataService
 from services.prediction_service import AsyncPredictionService
 from services.scheduler_service import PredictionScheduler
-from services.slack_service import SlackNotifier
-from utils.exceptions import SchedulerError, SlackNotificationError
+# TODO: SlackNotifier 제거됨 - Telegram으로 전환 예정
+# from services.slack_service import SlackNotifier
+from utils.exceptions import SchedulerError  # SlackNotificationError 제거됨
 
 router = APIRouter()
 logger = logging.getLogger("lotto_prediction")
@@ -48,11 +49,12 @@ def get_scheduler(
     global _scheduler
     if _scheduler is None:
         try:
-            slack_notifier = SlackNotifier()
+            # TODO: SlackNotifier 제거됨 - Telegram으로 전환 예정
+            # slack_notifier = SlackNotifier()
             _scheduler = PredictionScheduler(
                 data_service=data_service,
                 prediction_service=prediction_service,
-                slack_notifier=slack_notifier
+                slack_notifier=None  # 임시로 None 전달
             )
         except Exception as e:
             logger.exception(f"스케줄러 초기화 실패: {str(e)}")

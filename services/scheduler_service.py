@@ -8,7 +8,8 @@ from datetime import datetime, timedelta
 
 from services.prediction_service import AsyncPredictionService
 from services.data_service import AsyncDataService
-from services.slack_service import SlackNotifier
+# TODO: SlackNotifier 제거됨 - Telegram으로 전환 예정
+# from services.slack_service import SlackNotifier
 from models.prediction import LottoPrediction
 from utils.exceptions import SchedulerError, DataLoadError
 
@@ -22,11 +23,11 @@ class PredictionScheduler:
             self,
             data_service: AsyncDataService,
             prediction_service: AsyncPredictionService,
-            slack_notifier: SlackNotifier
+            slack_notifier=None  # TODO: Optional로 변경, Telegram으로 전환 예정
     ):
         self.data_service = data_service
         self.prediction_service = prediction_service
-        self.slack_notifier = slack_notifier
+        self.slack_notifier = slack_notifier  # TODO: Telegram으로 전환 예정
         self.scheduler = AsyncIOScheduler()
         self.running = False
 
@@ -68,20 +69,20 @@ class PredictionScheduler:
             )
             logger.info("금요일 오후 3시 예측 작업 스케줄링 완료")
 
-            # 일요일 오전 9시 당첨번호 업데이트 작업 스케줄링
+            # 토요일 밤 9시 당첨번호 업데이트 작업 스케줄링
             self.scheduler.add_job(
                 self._run_lottery_update_job,
-                CronTrigger(day_of_week='sun', hour=9, minute=0),
-                id='sunday_lottery_update',
-                kwargs={'job_name': '일요일 오전 9시 당첨번호 업데이트'}
+                CronTrigger(day_of_week='sat', hour=21, minute=0),
+                id='saturday_lottery_update',
+                kwargs={'job_name': '토요일 밤 9시 당첨번호 업데이트'}
             )
-            logger.info("일요일 오전 9시 당첨번호 업데이트 작업 스케줄링 완료")
+            logger.info("토요일 밤 9시 당첨번호 업데이트 작업 스케줄링 완료")
 
             # 스케줄러 시작
             logger.info("스케줄러 시작 중...")
             self.scheduler.start()
             self.running = True
-            logger.info("예측 스케줄러 시작됨 (월요일 11시, 금요일 15시, 일요일 9시)")
+            logger.info("예측 스케줄러 시작됨 (월요일 11시, 금요일 15시, 토요일 21시)")
 
             # 다음 실행 시간 로깅
             next_runs = self.get_next_run_times()

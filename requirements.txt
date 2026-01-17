@@ -8,9 +8,11 @@ anyio==4.9.0
 APScheduler==3.11.0
 asyncio==3.4.3
 attrs==25.3.0
+hypothesis==6.122.4
 certifi==2025.1.31
 cffi==1.17.1
 click==8.1.8
+sortedcontainers==2.4.0
 cryptography==44.0.2
 distro==1.9.0
 fastapi==0.115.12
@@ -34,6 +36,7 @@ PyMySQL==1.1.1
 python-dateutil==2.9.0.post0
 python-dotenv==1.1.0
 python-multipart==0.0.20
+python-telegram-bot==21.10
 pytz==2025.2
 scikit-learn==1.6.1
 scipy==1.15.2

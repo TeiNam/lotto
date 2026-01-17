@@ -37,19 +37,22 @@ async def lifespan(app: FastAPI):
         # 필요한 서비스들을 직접 생성
         from services.data_service import AsyncDataService
         from services.prediction_service import AsyncPredictionService
-        from services.slack_service import SlackNotifier
+        # TODO: SlackNotifier 제거됨 - Telegram으로 전환 예정
+        # from services.slack_service import SlackNotifier
         from services.scheduler_service import PredictionScheduler
 
         # 서비스 인스턴스 생성
         data_service = AsyncDataService()
         prediction_service = AsyncPredictionService(data_service)
-        slack_notifier = SlackNotifier()
+        # TODO: SlackNotifier 제거됨 - Telegram으로 전환 예정
+        # slack_notifier = SlackNotifier()
 
         # 스케줄러 초기화
+        # TODO: slack_notifier 파라미터 제거됨
         scheduler = PredictionScheduler(
             data_service=data_service,
             prediction_service=prediction_service,
-            slack_notifier=slack_notifier
+            slack_notifier=None  # 임시로 None 전달
         )
 
         # 전역 변수로 스케줄러 인스턴스 설정 (api/routers/scheduler.py에서 접근 가능하도록)

@@ -3,7 +3,8 @@ from typing import List, Dict, Any
 import logging
 from models.lotto_draw import LottoDraw
 from services.data_service import DataService
-from services.analysis_service import AnalysisService
+# TODO: AnalysisService 제거됨 - SimplifiedPredictionService로 대체 예정
+# from services.analysis_service import AnalysisService
 from services.prediction_service import PredictionService
 from evaluation.metrics import EvaluationMetrics
 

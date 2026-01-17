@@ -4,8 +4,8 @@ import asyncio
 from typing import List, Dict, Any, Optional, Tuple
 from models.prediction import LottoPrediction
 from services.data_service import AsyncDataService
-from services.analysis_service import AnalysisService
-from services.rag_service import RAGService
+# TODO: RAGService 제거됨 - SimplifiedPredictionService로 대체 예정
+# from services.rag_service import RAGService
 from config.settings import CONTINUITY_WEIGHT, FREQUENCY_WEIGHT, DISTRIBUTION_WEIGHT, PARITY_WEIGHT, SUM_RANGE_WEIGHT
 from utils.exceptions import PredictionGenerationError, ValidationError, DataLoadError, AnalysisError, \
     LottoPredictionError
@@ -18,7 +18,8 @@ class AsyncPredictionService:
 
     def __init__(self, data_service: AsyncDataService):
         self.data_service = data_service
-        self.rag_service = RAGService()
+        # TODO: RAGService 제거됨 - SimplifiedPredictionService로 대체 예정
+        # self.rag_service = RAGService()
 
     async def predict_next_draw(self, num_predictions: int = 5) -> Tuple[List[LottoPrediction], Dict[str, Any]]:
         """다음 회차 번호 예측 (비동기)"""
@@ -47,8 +48,10 @@ class AsyncPredictionService:
             if not all_draws:
                 raise DataLoadError("분석할 데이터가 없습니다")
 
-            analysis_service = AnalysisService(all_draws)
-            analysis_results = analysis_service.get_comprehensive_analysis()
+            # TODO: AnalysisService 제거됨 - SimplifiedPredictionService로 대체 예정
+            # analysis_service = AnalysisService(all_draws)
+            # analysis_results = analysis_service.get_comprehensive_analysis()
+            analysis_results = {}  # 임시로 빈 딕셔너리 사용
 
             if not analysis_results:
                 raise AnalysisError("데이터 분석에 실패했습니다")
@@ -67,10 +70,13 @@ class AsyncPredictionService:
 
         # 후보 조합 생성 (비동기)
         try:
-            raw_combinations, rag_api_usage = await self.rag_service.generate_combinations(
-                analysis_results,
-                num_combinations=max(10, num_predictions * 2)  # 최소 10개 이상 요청
-            )
+            # TODO: RAGService 제거됨 - SimplifiedPredictionService로 대체 예정
+            # raw_combinations, rag_api_usage = await self.rag_service.generate_combinations(
+            #     analysis_results,
+            #     num_combinations=max(10, num_predictions * 2)
+            # )
+            raw_combinations = []  # 임시로 빈 리스트 사용
+            rag_api_usage = {}
 
             # API 사용량 정보 업데이트
             if rag_api_usage:
@@ -285,10 +291,12 @@ class AsyncPredictionService:
             number_frequency: Dict[int, int]
     ) -> Optional[LottoPrediction]:
         """조합 점수 계산 (비동기) - 개선된 통계 기반 점수 시스템"""
+        # TODO: AnalysisService 제거됨 - SimplifiedPredictionService로 대체 예정
         # 분석 서비스 가져오기
-        all_draws = self.data_service.get_all_draws()
-        analysis_service = AnalysisService(all_draws)
-        analysis_results = analysis_service.get_comprehensive_analysis()
+        # all_draws = self.data_service.get_all_draws()
+        # analysis_service = AnalysisService(all_draws)
+        # analysis_results = analysis_service.get_comprehensive_analysis()
+        analysis_results = {}  # 임시로 빈 딕셔너리 사용
         
         # 1. 이전 회차와의 연속성 계산
         common_count = len(set(combo).intersection(set(last_numbers)))
@@ -316,16 +324,15 @@ class AsyncPredictionService:
         # 5. 합계 범위 점수
         sum_score = self._calculate_sum_range_score(combo, analysis_results)
 
-        # 통계적 패턴 검증 (유효성 검사)
-        if not analysis_service.validate_statistical_patterns(combo):
-            logger.debug(f"통계적 패턴 검증 실패: {combo}")
-            # 유효하지 않은 패턴이면 점수 페널티 부여
-            penalty = 0.5
-            continuity_score *= penalty
-            frequency_score *= penalty
-            distribution_score *= penalty
-            parity_score *= penalty
-            sum_score *= penalty
+        # TODO: 통계적 패턴 검증 제거됨
+        # if not analysis_service.validate_statistical_patterns(combo):
+        #     logger.debug(f"통계적 패턴 검증 실패: {combo}")
+        #     penalty = 0.5
+        #     continuity_score *= penalty
+        #     frequency_score *= penalty
+        #     distribution_score *= penalty
+        #     parity_score *= penalty
+        #     sum_score *= penalty
 
         # 최종 점수 계산 (가중치 적용)
         final_score = (
