@@ -59,7 +59,6 @@ COPY models/ ./models/
 COPY services/ ./services/
 COPY utils/ ./utils/
 COPY telegram_bot_handler.py .
-COPY lotto_oot_crawler.py .
 
 # Supervisor 설정 파일 복사
 COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
