@@ -6,7 +6,7 @@
 import asyncio
 import logging
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from telegram import Update, Bot, BotCommand
 from telegram.ext import (
