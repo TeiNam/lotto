@@ -81,17 +81,24 @@ class AsyncLottoRepository:
         return True
 
     @staticmethod
-    async def save_recommendation(numbers: List[int], next_no: int) -> bool:
-        """예측 결과를 recommand 테이블에 저장 (비동기)"""
-        # 정렬된 번호 사용
+    async def save_recommendation(
+        numbers: List[int], next_no: int, user_id: Optional[int] = None
+    ) -> bool:
+        """예측 결과를 recommand 테이블에 저장 (비동기)
+
+        Args:
+            numbers: 예측 번호 리스트
+            next_no: 다음 회차 번호
+            user_id: 텔레그램 사용자 ID (선택)
+        """
         sorted_numbers = sorted(numbers)
 
         query = """
-        INSERT INTO recommand (next_no, `1`, `2`, `3`, `4`, `5`, `6`) 
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO recommand (next_no, user_id, `1`, `2`, `3`, `4`, `5`, `6`) 
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """
 
-        params = (next_no, *sorted_numbers)
+        params = (next_no, user_id, *sorted_numbers)
 
         try:
             result = await AsyncDatabaseConnector.execute_query(query, params, fetch=False)
@@ -100,7 +107,7 @@ class AsyncLottoRepository:
                 logger.error(f"예측 결과 저장 실패: {sorted_numbers}, 회차: {next_no}")
                 return False
 
-            logger.info(f"예측 결과 저장 성공: {sorted_numbers}, 회차: {next_no}")
+            logger.info(f"예측 결과 저장 성공: {sorted_numbers}, 회차: {next_no}, user_id: {user_id}")
             return True
         except Exception as e:
             logger.error(f"예측 결과 저장 중 DB 오류: {e}, 번호: {sorted_numbers}, 회차: {next_no}")
@@ -171,47 +178,45 @@ class AsyncLottoRepository:
             raise DatabaseError(f"회차 존재 여부 확인 중 오류: {e}")
 
     @classmethod
-    async def get_recommendations_for_draw(cls, draw_no: int) -> List[Dict[str, Any]]:
-        """특정 회차에 대한 예측 결과 조회"""
+    async def get_recommendations_for_draw(
+        cls, draw_no: int, user_id: Optional[int] = None
+    ) -> List[Dict[str, Any]]:
+        """특정 회차에 대한 예측 결과 조회
+
+        Args:
+            draw_no: 회차 번호
+            user_id: 텔레그램 사용자 ID (None이면 전체 조회)
+        """
         try:
-            # 정수형으로 명시적 변환
             draw_no = int(draw_no)
-            logger.info(f"회차 {draw_no}에 대한 예측 조회 시작")
+            logger.info(f"회차 {draw_no}에 대한 예측 조회 시작 (user_id: {user_id})")
             
             pool = await AsyncDatabaseConnector.get_pool()
             
             async with pool.acquire() as conn:
                 async with conn.cursor(aiomysql.DictCursor) as cursor:
-                    # 먼저 전체 회차 목록 조회 (디버깅용)
-                    check_query = "SELECT DISTINCT next_no FROM recommand ORDER BY next_no"
-                    await cursor.execute(check_query)
-                    all_draws = await cursor.fetchall()
-                    available_draws = [row['next_no'] for row in all_draws]
-                    logger.info(f"사용 가능한 예측 회차: {available_draws}")
+                    if user_id is not None:
+                        query = """
+                        SELECT id, next_no, user_id, `1`, `2`, `3`, `4`, `5`, `6`, create_at
+                        FROM recommand
+                        WHERE next_no = %s AND user_id = %s
+                        ORDER BY id ASC
+                        """
+                        await cursor.execute(query, (draw_no, user_id))
+                    else:
+                        query = """
+                        SELECT id, next_no, user_id, `1`, `2`, `3`, `4`, `5`, `6`, create_at
+                        FROM recommand
+                        WHERE next_no = %s
+                        ORDER BY id ASC
+                        """
+                        await cursor.execute(query, (draw_no,))
                     
-                    # 해당 회차의 레코드 개수 확인
-                    count_query = "SELECT COUNT(*) as count FROM recommand WHERE next_no = %s"
-                    await cursor.execute(count_query, (draw_no,))
-                    count_result = await cursor.fetchone()
-                    record_count = count_result['count'] if count_result else 0
-                    logger.info(f"회차 {draw_no}에 대한 레코드 수: {record_count}")
-                    
-                    # 원래 쿼리
-                    query = """
-                    SELECT id, next_no, `1`, `2`, `3`, `4`, `5`, `6`, create_at
-                    FROM recommand
-                    WHERE next_no = %s
-                    ORDER BY id ASC
-                    """
-                    
-                    await cursor.execute(query, (draw_no,))
                     results = await cursor.fetchall()
                     
-                    logger.info(f"조회된 결과 수: {len(results)} for draw_no: {draw_no}")
+                    logger.info(f"조회된 결과 수: {len(results)} (draw_no: {draw_no}, user_id: {user_id})")
                     
                     if not results:
-                        # 쿼리 실행이 성공했으나 결과가 없는 경우
-                        logger.warning(f"회차 {draw_no}에 대한 예측 결과가 없습니다")
                         return []
                     
                     recommendations = []
@@ -221,6 +226,7 @@ class AsyncLottoRepository:
                             recommendations.append({
                                 "id": row['id'],
                                 "next_no": row['next_no'],
+                                "user_id": row.get('user_id'),
                                 "numbers": numbers,
                                 "create_at": row['create_at']
                             })

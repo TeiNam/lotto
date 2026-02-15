@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS `result` (
 CREATE TABLE IF NOT EXISTS `recommand` (
   `id` int unsigned NOT NULL AUTO_INCREMENT COMMENT 'PK',
   `next_no` int unsigned NOT NULL,
+  `user_id` bigint DEFAULT NULL COMMENT '텔레그램 사용자 ID',
   `1` tinyint unsigned NOT NULL,
   `2` tinyint unsigned NOT NULL,
   `3` tinyint unsigned NOT NULL,
@@ -21,5 +22,6 @@ CREATE TABLE IF NOT EXISTS `recommand` (
   `5` tinyint unsigned NOT NULL,
   `6` tinyint unsigned NOT NULL,
   `create_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`id`),
+  KEY `idx_recommand_user_draw` (`user_id`, `next_no`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;

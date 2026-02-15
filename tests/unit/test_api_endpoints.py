@@ -25,14 +25,13 @@ class TestSimplifiedPredictionEndpoint:
         """정상적인 예측 요청 테스트"""
         # Mock 설정
         with patch('api.routers.prediction.AsyncLottoRepository') as mock_repo, \
-             patch('api.routers.prediction.get_simplified_prediction_service') as mock_service_dep, \
-             patch('api.routers.prediction.get_telegram_notifier') as mock_notifier_dep:
+             patch('api.routers.prediction.get_simplified_prediction_service') as mock_service_dep:
             
             # Mock 데이터 설정 - async 메서드는 AsyncMock 사용
             mock_repo.get_last_draw = AsyncMock(return_value={
                 "no": 1165,
-                "num1": 1, "num2": 5, "num3": 12, "num4": 23, "num5": 34, "num6": 45,
-                "draw_date": datetime(2024, 1, 15)
+                "1": 1, "2": 5, "3": 12, "4": 23, "5": 34, "6": 45,
+                "create_at": datetime(2024, 1, 15)
             })
             
             mock_repo.save_recommendation = AsyncMock(return_value=True)
@@ -46,13 +45,8 @@ class TestSimplifiedPredictionEndpoint:
             mock_service.generate_predictions.return_value = mock_predictions
             mock_service_dep.return_value = mock_service
             
-            # Mock Telegram 알림
-            mock_notifier = AsyncMock()
-            mock_notifier.send_predictions.return_value = True
-            mock_notifier_dep.return_value = mock_notifier
-            
             # API 호출
-            response = client.post("/api/predict/simple", json={"count": 2})
+            response = client.post("/api/predict", json={"count": 2})
             
             # 검증
             assert response.status_code == 200
@@ -70,10 +64,10 @@ class TestSimplifiedPredictionEndpoint:
     async def test_predict_simple_invalid_count(self):
         """유효하지 않은 예측 개수 테스트"""
         # count가 범위를 벗어난 경우
-        response = client.post("/api/predict/simple", json={"count": 0})
+        response = client.post("/api/predict", json={"count": 0})
         assert response.status_code == 422  # Validation error
         
-        response = client.post("/api/predict/simple", json={"count": 21})
+        response = client.post("/api/predict", json={"count": 21})
         assert response.status_code == 422  # Validation error
     
     @pytest.mark.asyncio
@@ -84,7 +78,7 @@ class TestSimplifiedPredictionEndpoint:
             from utils.exceptions import DatabaseError
             mock_repo.get_last_draw.side_effect = DatabaseError("Connection failed")
             
-            response = client.post("/api/predict/simple", json={"count": 5})
+            response = client.post("/api/predict", json={"count": 5})
             
             assert response.status_code == 503
             assert "데이터베이스" in response.json()["detail"]
@@ -98,8 +92,8 @@ class TestSimplifiedPredictionEndpoint:
             # Mock 데이터 설정
             mock_repo.get_last_draw = AsyncMock(return_value={
                 "no": 1165,
-                "num1": 1, "num2": 5, "num3": 12, "num4": 23, "num5": 34, "num6": 45,
-                "draw_date": datetime(2024, 1, 15)
+                "1": 1, "2": 5, "3": 12, "4": 23, "5": 34, "6": 45,
+                "create_at": datetime(2024, 1, 15)
             })
             
             # 예측 생성 실패 시뮬레이션
@@ -109,7 +103,7 @@ class TestSimplifiedPredictionEndpoint:
             )
             mock_service_class.return_value = mock_service
             
-            response = client.post("/api/predict/simple", json={"count": 5})
+            response = client.post("/api/predict", json={"count": 5})
             
             assert response.status_code == 500
             assert "예측 생성" in response.json()["detail"]
@@ -118,14 +112,13 @@ class TestSimplifiedPredictionEndpoint:
     async def test_predict_simple_graceful_degradation_save_failure(self):
         """저장 실패 시 Graceful Degradation 테스트"""
         with patch('api.routers.prediction.AsyncLottoRepository') as mock_repo, \
-             patch('api.routers.prediction.get_simplified_prediction_service') as mock_service_dep, \
-             patch('api.routers.prediction.get_telegram_notifier') as mock_notifier_dep:
+             patch('api.routers.prediction.get_simplified_prediction_service') as mock_service_dep:
             
             # Mock 데이터 설정
             mock_repo.get_last_draw = AsyncMock(return_value={
                 "no": 1165,
-                "num1": 1, "num2": 5, "num3": 12, "num4": 23, "num5": 34, "num6": 45,
-                "draw_date": datetime(2024, 1, 15)
+                "1": 1, "2": 5, "3": 12, "4": 23, "5": 34, "6": 45,
+                "create_at": datetime(2024, 1, 15)
             })
             
             # 저장 실패 시뮬레이션
@@ -139,57 +132,14 @@ class TestSimplifiedPredictionEndpoint:
             mock_service.generate_predictions.return_value = mock_predictions
             mock_service_dep.return_value = mock_service
             
-            # Mock Telegram 알림
-            mock_notifier = AsyncMock()
-            mock_notifier.send_predictions.return_value = True
-            mock_notifier_dep.return_value = mock_notifier
-            
             # API 호출
-            response = client.post("/api/predict/simple", json={"count": 1})
+            response = client.post("/api/predict", json={"count": 1})
             
             # 저장 실패해도 예측 결과는 반환되어야 함
             assert response.status_code == 200
             data = response.json()
             assert len(data["predictions"]) == 1
     
-    @pytest.mark.asyncio
-    async def test_predict_simple_graceful_degradation_notification_failure(self):
-        """알림 실패 시 Graceful Degradation 테스트"""
-        with patch('api.routers.prediction.AsyncLottoRepository') as mock_repo, \
-             patch('api.routers.prediction.get_simplified_prediction_service') as mock_service_dep, \
-             patch('api.routers.prediction.get_telegram_notifier') as mock_notifier_dep:
-            
-            # Mock 데이터 설정
-            mock_repo.get_last_draw = AsyncMock(return_value={
-                "no": 1165,
-                "num1": 1, "num2": 5, "num3": 12, "num4": 23, "num5": 34, "num6": 45,
-                "draw_date": datetime(2024, 1, 15)
-            })
-            
-            mock_repo.save_recommendation = AsyncMock(return_value=True)
-            
-            # Mock 예측 서비스
-            mock_service = AsyncMock()
-            mock_predictions = [
-                LottoPrediction(combination=[3, 12, 23, 28, 35, 42], score=0.0, common_with_last=0),
-            ]
-            mock_service.generate_predictions.return_value = mock_predictions
-            mock_service_dep.return_value = mock_service
-            
-            # Telegram 알림 실패 시뮬레이션
-            mock_notifier = AsyncMock()
-            mock_notifier.send_predictions.return_value = False
-            mock_notifier_dep.return_value = mock_notifier
-            
-            # API 호출
-            response = client.post("/api/predict/simple", json={"count": 1})
-            
-            # 알림 실패해도 예측 결과는 반환되어야 함
-            assert response.status_code == 200
-            data = response.json()
-            assert len(data["predictions"]) == 1
-            assert data["analysis_summary"]["notification_sent"] is False
-
 
 class TestHealthCheckEndpoint:
     """헬스 체크 엔드포인트 테스트"""

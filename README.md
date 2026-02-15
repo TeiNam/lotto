@@ -167,14 +167,13 @@ lotto/
 │   ├── random_generator.py          # 난수 생성
 │   ├── duplicate_checker.py         # 중복 검증
 │   ├── simplified_prediction_service.py  # 예측 서비스
-│   ├── telegram_notifier.py         # 텔레그램 알림
+│   ├── data_service.py              # 데이터 서비스
 │   └── lottery_service.py           # 당첨번호 크롤링
 ├── tests/                  # 테스트
 │   ├── unit/               # 단위 테스트
 │   ├── property/           # 속성 기반 테스트
 │   └── integration/        # 통합 테스트
 ├── telegram_bot_handler.py # Telegram Bot 핸들러
-├── lotto_oot_crawler.py    # 당첨번호 크롤러
 └── requirements.txt        # 의존성
 ```
 
