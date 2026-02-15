@@ -18,7 +18,7 @@ class AsyncLottoRepository:
         if end_no is None:
             # 최신 회차까지 전부 조회
             query = """
-            SELECT no, `1`, `2`, `3`, `4`, `5`, `6`, create_at 
+            SELECT no, `1`, `2`, `3`, `4`, `5`, `6`, bonus, create_at 
             FROM result 
             WHERE no >= %s
             ORDER BY no
@@ -26,7 +26,7 @@ class AsyncLottoRepository:
             params = (start_no,)
         else:
             query = """
-            SELECT no, `1`, `2`, `3`, `4`, `5`, `6`, create_at 
+            SELECT no, `1`, `2`, `3`, `4`, `5`, `6`, bonus, create_at 
             FROM result 
             WHERE no BETWEEN %s AND %s 
             ORDER BY no
@@ -46,7 +46,7 @@ class AsyncLottoRepository:
     async def get_last_draw() -> Optional[Dict[str, Any]]:
         """가장 최근 회차의 당첨 번호 조회 (비동기)"""
         query = """
-        SELECT no, `1`, `2`, `3`, `4`, `5`, `6`, create_at 
+        SELECT no, `1`, `2`, `3`, `4`, `5`, `6`, bonus, create_at 
         FROM result 
         ORDER BY no DESC 
         LIMIT 1
@@ -114,9 +114,11 @@ class AsyncLottoRepository:
             return False
 
     @staticmethod
-    async def save_draw_result(draw_no: int, numbers: List[int]) -> bool:
+    async def save_draw_result(
+        draw_no: int, numbers: List[int], bonus: Optional[int] = None
+    ) -> bool:
         """새로운 당첨 결과를 result 테이블에 저장 (비동기)"""
-        # 번호 정렬 (필요하다면)
+        # 번호 정렬
         sorted_numbers = sorted(numbers)
 
         # 중복 저장 방지를 위해 기존 데이터 확인
@@ -129,22 +131,22 @@ class AsyncLottoRepository:
             logger.warning(f"이미 존재하는 당첨 결과입니다 (회차: {draw_no})")
             return False
 
-        # 새 결과 저장
+        # 새 결과 저장 (보너스 번호 포함)
         query = """
-        INSERT INTO result (no, `1`, `2`, `3`, `4`, `5`, `6`) 
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO result (no, `1`, `2`, `3`, `4`, `5`, `6`, bonus) 
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """
 
-        params = (draw_no, *sorted_numbers)
+        params = (draw_no, *sorted_numbers, bonus)
 
         try:
             result = await AsyncDatabaseConnector.execute_query(query, params, fetch=False)
 
             if result is None or result <= 0:
-                logger.error(f"당첨 결과 저장 실패: {sorted_numbers}, 회차: {draw_no}")
+                logger.error(f"당첨 결과 저장 실패: {sorted_numbers}, 보너스: {bonus}, 회차: {draw_no}")
                 return False
 
-            logger.info(f"당첨 결과 저장 성공: {sorted_numbers}, 회차: {draw_no}")
+            logger.info(f"당첨 결과 저장 성공: {sorted_numbers}, 보너스: {bonus}, 회차: {draw_no}")
             return True
         except Exception as e:
             logger.error(f"당첨 결과 저장 중 DB 오류: {e}, 번호: {sorted_numbers}, 회차: {draw_no}")

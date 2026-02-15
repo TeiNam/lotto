@@ -147,7 +147,8 @@ async def save_draw_result(request: DrawResultRequest):
         sorted_numbers = sorted(request.numbers)
         success = await AsyncLottoRepository.save_draw_result(
             draw_no=request.draw_no,
-            numbers=sorted_numbers
+            numbers=sorted_numbers,
+            bonus=request.bonus
         )
 
         if success:
@@ -156,6 +157,7 @@ async def save_draw_result(request: DrawResultRequest):
                 success=True,
                 draw_no=request.draw_no,
                 numbers=sorted_numbers,
+                bonus=request.bonus,
                 message="당첨 결과가 성공적으로 저장되었습니다."
             )
         else:
@@ -163,6 +165,7 @@ async def save_draw_result(request: DrawResultRequest):
                 success=False,
                 draw_no=request.draw_no,
                 numbers=sorted_numbers,
+                bonus=request.bonus,
                 message="당첨 결과 저장에 실패했습니다. 이미 존재하는 회차일 수 있습니다."
             )
 

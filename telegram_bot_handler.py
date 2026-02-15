@@ -8,7 +8,7 @@ import logging
 from datetime import datetime
 from typing import List, Optional
 
-from telegram import Update, Bot
+from telegram import Update, Bot, BotCommand
 from telegram.ext import (
     Application, CommandHandler, ContextTypes,
     MessageHandler, filters
@@ -126,14 +126,16 @@ async def update_lottery_results():
                     start_no=start_no, end_no=last_draw_no
                 )
 
-                # 당첨번호 알림 발송
+                # 당첨번호 알림 발송 (보너스 번호 포함)
                 numbers = [last_draw[str(i)] for i in range(1, 7)]
                 numbers_str = ", ".join(str(n) for n in sorted(numbers))
+                bonus = last_draw.get('bonus')
+                bonus_str = f"\n🎯 보너스 번호: {bonus}" if bonus else ""
 
                 message = (
-                    f"[{last_draw_no}회 당첨번호 업데이트]\n\n"
-                    f"당첨 번호: [{numbers_str}]\n"
-                    f"업데이트 시각: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+                    f"🏆 {last_draw_no}회 당첨번호 업데이트\n\n"
+                    f"🎱 당첨 번호: [{numbers_str}]{bonus_str}\n"
+                    f"⏰ 업데이트 시각: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
                 )
 
                 sent = await send_message_with_retry(
@@ -146,7 +148,7 @@ async def update_lottery_results():
 
             # 실패 알림도 발송
             fail_message = (
-                "[당첨번호 업데이트 실패]\n\n"
+                "⚠️ 당첨번호 업데이트 실패\n\n"
                 "아직 발표되지 않았거나 조회 중 오류가 발생했습니다.\n"
                 "30분 후 재시도합니다."
             )
@@ -156,7 +158,7 @@ async def update_lottery_results():
         logger.error(f"당첨번호 업데이트 중 오류: {e}", exc_info=True)
 
         error_message = (
-            "[당첨번호 업데이트 오류]\n\n"
+            "❌ 당첨번호 업데이트 오류\n\n"
             f"오류: {str(e)[:200]}"
         )
         await send_message_with_retry(bot, TELEGRAM_CHAT_ID, error_message)
@@ -177,7 +179,7 @@ async def generate_weekly_predictions():
             logger.error("예측 생성 실패")
             await send_message_with_retry(
                 bot, TELEGRAM_CHAT_ID,
-                "[주간 예측 생성 실패]\n\n예측 번호를 생성하지 못했습니다."
+                "❌ 주간 예측 생성 실패\n\n예측 번호를 생성하지 못했습니다."
             )
             return
 
@@ -203,11 +205,11 @@ async def generate_weekly_predictions():
         # 메시지 구성
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         message_lines = [
-            f"[{next_draw_no}회 주간 예측]",
+            f"🎰 {next_draw_no}회 주간 예측",
             "",
-            f"생성 시각: {timestamp}",
-            f"생성 개수: {len(predictions)}개",
-            f"저장 완료: {saved_count}개",
+            f"⏰ 생성 시각: {timestamp}",
+            f"📊 생성 개수: {len(predictions)}개",
+            f"💾 저장 완료: {saved_count}개",
             ""
         ]
 
@@ -227,17 +229,96 @@ async def generate_weekly_predictions():
         logger.error(f"주간 예측 생성 중 오류: {e}", exc_info=True)
 
         error_message = (
-            "[주간 예측 생성 오류]\n\n"
+            "❌ 주간 예측 생성 오류\n\n"
             f"오류: {str(e)[:200]}"
         )
         await send_message_with_retry(bot, TELEGRAM_CHAT_ID, error_message)
 
+async def send_monday_reminder():
+    """월요일 오전 10시: 한 주 시작 알림"""
+    logger.info("월요일 알림 발송")
+    bot = Bot(token=TELEGRAM_BOT_TOKEN)
+
+    last_draw = await AsyncLottoRepository.get_last_draw()
+    next_draw_no = last_draw['no'] + 1 if last_draw else "?"
+
+    message = (
+        f"🌅 한 주가 시작되었어요!\n\n"
+        f"🎱 이번주 로또 {next_draw_no}회 번호를 생성해볼까요?\n"
+        f"👉 /generate 명령어로 번호를 생성해보세요!"
+    )
+    sent = await send_message_with_retry(bot, TELEGRAM_CHAT_ID, message)
+    if not sent:
+        logger.error("월요일 알림 발송 최종 실패")
+
+
+async def send_friday_purchase_reminder():
+    """금요일 오후 4시: 구매 알림"""
+    logger.info("금요일 구매 알림 발송")
+    bot = Bot(token=TELEGRAM_BOT_TOKEN)
+
+    message = (
+        "🛒 이번주 토요일이 오기전에 로또 구매하러 갑시다!\n\n"
+        "📋 /mylist 로 내 번호를 확인하세요."
+    )
+    sent = await send_message_with_retry(bot, TELEGRAM_CHAT_ID, message)
+    if not sent:
+        logger.error("금요일 구매 알림 발송 최종 실패")
+
+
+async def send_saturday_purchase_reminder():
+    """토요일 오후 6시: 마감 임박 알림"""
+    logger.info("토요일 구매 마감 알림 발송")
+    bot = Bot(token=TELEGRAM_BOT_TOKEN)
+
+    message = (
+        "🚨 아직 안늦었어요! 빨리 구매하러 갑시다!\n\n"
+        "⏰ 로또 판매 마감이 얼마 남지 않았어요.\n"
+        "📋 /mylist 로 내 번호를 확인하세요."
+    )
+    sent = await send_message_with_retry(bot, TELEGRAM_CHAT_ID, message)
+    if not sent:
+        logger.error("토요일 구매 마감 알림 발송 최종 실패")
+
+
 
 def setup_scheduler():
-    """스케줄러 설정"""
+    """스케줄러 설정 (한국 시간 기준)"""
     global scheduler
 
     scheduler = AsyncIOScheduler()
+
+    # 매주 월요일 오전 10시: 한 주 시작 알림
+    scheduler.add_job(
+        send_monday_reminder,
+        CronTrigger(day_of_week='mon', hour=10, minute=0),
+        id='monday_reminder',
+        name='월요일 오전 10시 한 주 시작 알림'
+    )
+
+    # 매주 금요일 정오: 예측 자동 생성
+    scheduler.add_job(
+        generate_weekly_predictions,
+        CronTrigger(day_of_week='fri', hour=12, minute=0),
+        id='friday_prediction_generation',
+        name='금요일 정오 예측 생성'
+    )
+
+    # 매주 금요일 오후 4시: 구매 알림
+    scheduler.add_job(
+        send_friday_purchase_reminder,
+        CronTrigger(day_of_week='fri', hour=16, minute=0),
+        id='friday_purchase_reminder',
+        name='금요일 오후 4시 구매 알림'
+    )
+
+    # 매주 토요일 오후 6시: 마감 임박 알림
+    scheduler.add_job(
+        send_saturday_purchase_reminder,
+        CronTrigger(day_of_week='sat', hour=18, minute=0),
+        id='saturday_purchase_reminder',
+        name='토요일 오후 6시 구매 마감 알림'
+    )
 
     # 매주 토요일 밤 9시: 당첨번호 업데이트
     scheduler.add_job(
@@ -255,17 +336,12 @@ def setup_scheduler():
         name='토요일 밤 9시 30분 당첨번호 업데이트 재시도'
     )
 
-    # 매주 금요일 정오: 예측 생성 및 텔레그램 전송
-    scheduler.add_job(
-        generate_weekly_predictions,
-        CronTrigger(day_of_week='fri', hour=12, minute=0),
-        id='friday_prediction_generation',
-        name='금요일 정오 예측 생성'
-    )
-
     scheduler.start()
     logger.info("스케줄러 시작됨")
+    logger.info("  - 매주 월요일 10:00: 한 주 시작 알림")
     logger.info("  - 매주 금요일 12:00: 예측 생성 및 텔레그램 전송")
+    logger.info("  - 매주 금요일 16:00: 구매 알림")
+    logger.info("  - 매주 토요일 18:00: 구매 마감 알림")
     logger.info("  - 매주 토요일 21:00: 당첨번호 업데이트")
     logger.info("  - 매주 토요일 21:30: 당첨번호 업데이트 재시도")
 
@@ -291,16 +367,17 @@ def stop_scheduler():
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """시작 명령어 핸들러"""
     welcome_message = (
-        "[로또 예측 봇]\n\n"
+        "🎰 로또 예측 봇 🎰\n\n"
         "사용 가능한 명령어:\n"
-        "/generate - 5개 조합 생성 (기본)\n"
-        "/generate [개수] - 원하는 개수만큼 생성 (최대 20개)\n"
-        "/mylist - 이번 회차 생성된 전체 번호 보기\n"
-        "/winning - 최신 회차 당첨 번호 확인\n"
-        "/result - 내 예측과 당첨 번호 매칭 확인\n"
-        "/result [회차] - 특정 회차 결과 확인\n"
-        "/help - 명령어 안내\n"
-        "/start - 시작 메시지 표시"
+        "🔮 /generate - 5개 조합 생성 (기본)\n"
+        "🔮 /generate [개수] - 원하는 개수만큼 생성 (최대 20개)\n"
+        "📋 /mylist - 이번 회차 생성된 전체 번호 보기\n"
+        "🏆 /winning - 최신 회차 당첨 번호 확인\n"
+        "📊 /result - 내 예측과 당첨 번호 매칭 확인\n"
+        "📊 /result [회차] - 특정 회차 결과 확인\n"
+        "❓ /help - 명령어 안내\n"
+        "🏠 /start - 시작 메시지 표시\n\n"
+        "🔗 GitHub: https://github.com/TeiNam/lotto"
     )
     await update.message.reply_text(welcome_message)
 
@@ -308,23 +385,23 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """도움말 명령어 핸들러"""
     help_message = (
-        "[명령어 안내]\n\n"
-        "예측 생성:\n"
+        "📖 명령어 안내\n\n"
+        "🔮 예측 생성:\n"
         "  /generate - 5개 조합 생성 (기본)\n"
         "  /generate [개수] - 원하는 개수만큼 생성 (최대 20개)\n"
         "  예: /generate 10\n\n"
-        "내 번호 확인:\n"
+        "📋 내 번호 확인:\n"
         "  /mylist - 이번 회차 생성된 전체 번호 보기\n\n"
-        "당첨 확인:\n"
+        "🏆 당첨 확인:\n"
         "  /winning - 최신 회차 당첨 번호 확인\n\n"
-        "결과 확인:\n"
+        "📊 결과 확인:\n"
         "  /result - 내가 생성한 번호와 당첨 번호 매칭 확인\n"
         "  /result [회차] - 특정 회차 결과 확인\n"
         "  예: /result 1150\n\n"
-        "기타:\n"
+        "⚙️ 기타:\n"
         "  /help - 이 메시지 표시\n"
         "  /start - 시작 메시지 표시\n\n"
-        "참고: 당첨 번호는 매주 토요일 밤 9시에 자동 업데이트됩니다."
+        "⏰ 참고: 당첨 번호는 매주 토요일 밤 9시에 자동 업데이트됩니다."
     )
     await update.message.reply_text(help_message)
 
@@ -348,7 +425,7 @@ async def generate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
 
         loading_msg = await update.message.reply_text(
-            f"{num_predictions}개 조합 생성 중..."
+            f"🔮 {num_predictions}개 조합 생성 중..."
         )
 
         predictions = await prediction_service.generate_predictions(
@@ -377,11 +454,11 @@ async def generate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # 결과 메시지
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         message_lines = [
-            f"[{next_draw_no}회 예측 결과]",
+            f"🎰 {next_draw_no}회 예측 결과",
             "",
-            f"생성 시각: {timestamp}",
-            f"생성 개수: {len(predictions)}개",
-            f"저장 완료: {saved_count}개",
+            f"⏰ 생성 시각: {timestamp}",
+            f"📊 생성 개수: {len(predictions)}개",
+            f"💾 저장 완료: {saved_count}개",
             ""
         ]
 
@@ -432,7 +509,7 @@ async def mylist_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # 메시지 구성
         message_lines = [
-            f"[{next_draw_no}회 내 예측 번호 전체 목록]",
+            f"📋 {next_draw_no}회 내 예측 번호 전체 목록",
             "",
             f"총 {len(predictions)}개 조합",
             ""
@@ -498,6 +575,30 @@ def _split_message(lines: List[str], max_length: int = 4000) -> List[str]:
 
     return chunks
 
+def _determine_rank(matches: int, bonus_match: bool) -> str:
+    """로또 등수 판정
+
+    Args:
+        matches: 당첨 번호와 일치하는 개수 (보너스 제외, 1~6번 기준)
+        bonus_match: 보너스 번호 일치 여부
+
+    Returns:
+        등수 문자열 (1등~5등 또는 낙첨)
+    """
+    if matches == 6:
+        return "1등"
+    elif matches == 5 and bonus_match:
+        return "2등"
+    elif matches == 5:
+        return "3등"
+    elif matches == 4:
+        return "4등"
+    elif matches == 3:
+        return "5등"
+    else:
+        return "낙첨"
+
+
 
 async def check_winning_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """당첨 번호 확인 명령어 핸들러"""
@@ -513,11 +614,13 @@ async def check_winning_command(update: Update, context: ContextTypes.DEFAULT_TY
         draw_date = last_draw['create_at']
 
         numbers_str = ", ".join(str(n) for n in sorted(numbers))
+        bonus = last_draw.get('bonus')
+        bonus_str = f"\n🎯 보너스 번호: {bonus}" if bonus else ""
 
         message = (
-            f"[{draw_no}회 당첨 번호]\n\n"
-            f"추첨일: {draw_date}\n"
-            f"당첨 번호: [{numbers_str}]\n\n"
+            f"🏆 {draw_no}회 당첨 번호\n\n"
+            f"📅 추첨일: {draw_date}\n"
+            f"🎱 당첨 번호: [{numbers_str}]{bonus_str}\n\n"
             f"다음 회차는 {draw_no + 1}회입니다."
         )
 
@@ -553,13 +656,16 @@ async def check_result_command(update: Update, context: ContextTypes.DEFAULT_TYP
 
         draw_no = target_draw_no
 
-        # 당첨 번호 조회
-        winning_numbers = await _get_winning_numbers(draw_no)
-        if not winning_numbers:
+        # 당첨 번호 조회 (보너스 번호 포함)
+        winning_data = await _get_winning_numbers(draw_no)
+        if not winning_data:
             await update.message.reply_text(
                 f"{draw_no}회차 당첨 번호를 찾을 수 없습니다."
             )
             return
+
+        winning_numbers = winning_data["numbers"]
+        bonus_number = winning_data["bonus"]
 
         # 내 예측 번호 조회 (사용자별)
         user_id = update.effective_user.id
@@ -573,50 +679,57 @@ async def check_result_command(update: Update, context: ContextTypes.DEFAULT_TYP
             )
             return
 
-        # 매칭 결과 계산
+        # 매칭 결과 계산 (보너스 번호 매칭 포함)
+        winning_set = set(winning_numbers)
         results = []
         for pred in my_predictions:
             pred_numbers = set(pred['numbers'])
-            winning_set = set(winning_numbers)
             matches = len(pred_numbers & winning_set)
-            results.append((pred['numbers'], matches))
+            bonus_match = bonus_number in pred_numbers if bonus_number else False
+            rank = _determine_rank(matches, bonus_match)
+            results.append((pred['numbers'], matches, bonus_match, rank))
 
-        results.sort(key=lambda x: x[1], reverse=True)
+        # 등수 우선, 같은 등수면 매칭 수 내림차순
+        rank_order = {"1등": 1, "2등": 2, "3등": 3, "4등": 4, "5등": 5, "낙첨": 6}
+        results.sort(key=lambda x: (rank_order.get(x[3], 99), -x[1]))
 
         winning_str = ", ".join(str(n) for n in sorted(winning_numbers))
+        bonus_str = f" + 보너스: {bonus_number}" if bonus_number else ""
 
         message_lines = [
-            f"[{draw_no}회차 결과 확인]",
+            f"📊 {draw_no}회차 결과 확인",
             "",
-            f"당첨 번호: [{winning_str}]",
-            f"내 예측: {len(my_predictions)}개",
+            f"🎱 당첨 번호: [{winning_str}]{bonus_str}",
+            f"🔮 내 예측: {len(my_predictions)}개",
             ""
         ]
 
-        # 등수 판정
-        rank_info = {
-            6: "1등",
-            5: "2등/3등",
-            4: "4등",
-            3: "5등",
-        }
-
+        # 최고 등수 판정
+        best_rank = results[0][3] if results else "낙첨"
         best_match = results[0][1] if results else 0
 
-        if best_match >= 3:
-            message_lines.append(f"최고 매칭: {best_match}개 일치")
-            if best_match in rank_info:
-                message_lines.append(f"  -> {rank_info[best_match]}")
+        if best_rank != "낙첨":
+            message_lines.append(f"🎉 최고 결과: {best_match}개 일치 → {best_rank}")
+            if best_rank in ("1등", "2등", "3등", "4등"):
+                message_lines.append("")
+                message_lines.append("🍻 앱 개발자에게 한 턱 쏘는걸 잊지 마세요!")
             message_lines.append("")
 
         message_lines.append("[상세 결과]")
         # 전체 결과 표시
-        for idx, (numbers, matches) in enumerate(results, 1):
+        for idx, (numbers, matches, bonus_match, rank) in enumerate(results, 1):
             numbers_str = ", ".join(str(n) for n in numbers)
-            mark = "O" if matches >= 3 else "X"
-            message_lines.append(
-                f"{idx}. [{numbers_str}] - {matches}개 일치 {mark}"
-            )
+            if rank != "낙첨":
+                mark = "🏆" if rank in ("1등", "2등") else "✅"
+                bonus_info = " (보너스⭕)" if bonus_match and matches == 5 else ""
+                message_lines.append(
+                    f"{idx}. [{numbers_str}] - {matches}개 일치{bonus_info} {mark} {rank}"
+                )
+            else:
+                mark = "✅" if matches >= 3 else "❌"
+                message_lines.append(
+                    f"{idx}. [{numbers_str}] - {matches}개 일치 {mark}"
+                )
 
         # 텔레그램 메시지 길이 제한(4096자) 대응
         message = "\n".join(message_lines)
@@ -634,12 +747,16 @@ async def check_result_command(update: Update, context: ContextTypes.DEFAULT_TYP
         )
 
 
-async def _get_winning_numbers(draw_no: int) -> Optional[List[int]]:
-    """특정 회차의 당첨 번호 조회"""
+async def _get_winning_numbers(draw_no: int) -> Optional[Dict[str, Any]]:
+    """특정 회차의 당첨 번호 및 보너스 번호 조회
+
+    Returns:
+        {"numbers": [1,2,3,4,5,6], "bonus": 7} 또는 None
+    """
     try:
         from database.connector import AsyncDatabaseConnector
         query = """
-        SELECT `1`, `2`, `3`, `4`, `5`, `6`
+        SELECT `1`, `2`, `3`, `4`, `5`, `6`, bonus
         FROM result
         WHERE no = %s
         """
@@ -649,7 +766,9 @@ async def _get_winning_numbers(draw_no: int) -> Optional[List[int]]:
 
         if results and len(results) > 0:
             row = results[0]
-            return [row[str(i)] for i in range(1, 7)]
+            numbers = [row[str(i)] for i in range(1, 7)]
+            bonus = row.get('bonus')
+            return {"numbers": numbers, "bonus": bonus}
 
         return None
 
@@ -661,16 +780,16 @@ async def _get_winning_numbers(draw_no: int) -> Optional[List[int]]:
 async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """알 수 없는 명령어 핸들러"""
     message = (
-        "알 수 없는 명령어입니다.\n\n"
+        "❓ 알 수 없는 명령어입니다.\n\n"
         "사용 가능한 명령어:\n"
-        "/generate - 예측 생성 (기본 5개)\n"
-        "/generate [개수] - 원하는 개수만큼 생성 (최대 20개)\n"
-        "/mylist - 이번 회차 내 번호 보기\n"
-        "/winning - 당첨 번호 확인\n"
-        "/result - 내 예측과 당첨 번호 매칭 확인\n"
-        "/result [회차] - 특정 회차 결과 확인\n"
-        "/help - 명령어 안내\n"
-        "/start - 시작 메시지 표시"
+        "🔮 /generate - 예측 생성 (기본 5개)\n"
+        "🔮 /generate [개수] - 원하는 개수만큼 생성 (최대 20개)\n"
+        "📋 /mylist - 이번 회차 내 번호 보기\n"
+        "🏆 /winning - 당첨 번호 확인\n"
+        "📊 /result - 내 예측과 당첨 번호 매칭 확인\n"
+        "📊 /result [회차] - 특정 회차 결과 확인\n"
+        "❓ /help - 명령어 안내\n"
+        "🏠 /start - 시작 메시지 표시"
     )
     await update.message.reply_text(message)
 
@@ -713,6 +832,19 @@ def main():
         logger.info("Bot이 준비되었습니다.")
 
         await application.initialize()
+
+        # 봇 명령어 메뉴 자동 등록
+        bot_commands = [
+            BotCommand("start", "시작 메시지 표시"),
+            BotCommand("generate", "예측 번호 생성"),
+            BotCommand("mylist", "이번 회차 내 번호 보기"),
+            BotCommand("winning", "당첨 번호 확인"),
+            BotCommand("result", "결과 확인"),
+            BotCommand("help", "명령어 안내"),
+        ]
+        await application.bot.set_my_commands(bot_commands)
+        logger.info("봇 명령어 메뉴 등록 완료")
+
         await application.start()
         await application.updater.start_polling(
             allowed_updates=Update.ALL_TYPES

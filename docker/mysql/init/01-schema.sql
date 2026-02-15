@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS `result` (
   `4` tinyint unsigned NOT NULL,
   `5` tinyint unsigned NOT NULL,
   `6` tinyint unsigned NOT NULL,
+  `bonus` tinyint unsigned DEFAULT NULL COMMENT '보너스 번호',
   `create_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`no`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='결과';

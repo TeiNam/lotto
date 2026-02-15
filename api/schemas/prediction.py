@@ -1,4 +1,4 @@
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -57,6 +57,7 @@ class DrawResultRequest(BaseModel):
     """당첨 결과 저장 요청 모델"""
     draw_no: int = Field(..., description="회차 번호")
     numbers: List[int] = Field(..., description="당첨 번호 6개")
+    bonus: Optional[int] = Field(None, description="보너스 번호")
 
     @field_validator("draw_no")
     @classmethod
@@ -79,11 +80,19 @@ class DrawResultRequest(BaseModel):
 
         return v
 
+    @field_validator("bonus")
+    @classmethod
+    def validate_bonus(cls, v):
+        if v is not None and (v < 1 or v > 45):
+            raise ValueError("보너스 번호는 1~45 사이여야 합니다")
+        return v
+
     model_config = {
         "json_schema_extra": {
             "example": {
                 "draw_no": 1166,
-                "numbers": [1, 15, 19, 23, 28, 42]
+                "numbers": [1, 15, 19, 23, 28, 42],
+                "bonus": 7
             }
         }
     }
@@ -94,4 +103,5 @@ class DrawResultResponse(BaseModel):
     success: bool = Field(..., description="저장 성공 여부")
     draw_no: int = Field(..., description="저장된 회차 번호")
     numbers: List[int] = Field(..., description="저장된 당첨 번호")
+    bonus: Optional[int] = Field(None, description="보너스 번호")
     message: str = Field(..., description="결과 메시지")

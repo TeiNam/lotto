@@ -126,7 +126,9 @@ class LotteryService:
             sorted_numbers = sorted(numbers)
 
             # 3. 예측 결과와 비교
-            prediction_comparisons = await cls.get_prediction_comparison(draw_no, sorted_numbers)
+            prediction_comparisons = await cls.get_prediction_comparison(
+                draw_no, sorted_numbers, bonus_no
+            )
 
             # 4. 이미 존재하는지 확인
             from database.repositories.lotto_repository import AsyncLottoRepository
@@ -136,10 +138,11 @@ class LotteryService:
                 logger.info(f"로또 {draw_no}회차 당첨 정보가 이미 데이터베이스에 존재합니다")
                 return True
 
-            # 5. 데이터베이스에 저장 (1~6 번호만)
+            # 5. 데이터베이스에 저장 (보너스 번호 포함)
             success = await AsyncLottoRepository.save_draw_result(
                 draw_no=draw_no,
-                numbers=sorted_numbers
+                numbers=sorted_numbers,
+                bonus=bonus_no
             )
 
             if success:
@@ -184,7 +187,7 @@ class LotteryService:
             return False
 
     @classmethod
-    async def get_prediction_comparison(cls, draw_no: int, winning_numbers: list) -> list:
+    async def get_prediction_comparison(cls, draw_no: int, winning_numbers: list, bonus_no: int = None) -> list:
         """해당 회차에 대한 예측 결과와 실제 당첨 번호 비교"""
         try:
             # 데이터베이스에서 해당 회차에 대한 예측 결과 조회
@@ -253,11 +256,13 @@ class LotteryService:
                 # 맞은 번호 개수 계산
                 pred_numbers_set = set(pred_numbers)
                 matched_count = len(pred_numbers_set.intersection(winning_numbers_set))
+                bonus_match = bonus_no in pred_numbers_set if bonus_no else False
                 
                 comparison_results.append({
                     "prediction_numbers": pred_numbers,
                     "matched_count": matched_count,
-                    "matched_numbers": list(pred_numbers_set.intersection(winning_numbers_set))
+                    "matched_numbers": list(pred_numbers_set.intersection(winning_numbers_set)),
+                    "bonus_match": bonus_match
                 })
             
             # 맞은 개수 순으로 정렬

@@ -14,6 +14,7 @@ class LottoDraw:
     draw_no: int
     numbers: List[int]
     draw_date: datetime
+    bonus: int = None
 
     @classmethod
     def from_db_row(cls, row: Dict[str, Any]):
@@ -57,7 +58,8 @@ class LottoDraw:
             return cls(
                 draw_no=row['no'],
                 numbers=numbers,
-                draw_date=draw_date
+                draw_date=draw_date,
+                bonus=row.get('bonus')
             )
         except ValidationError:
             # 검증 오류 전파
