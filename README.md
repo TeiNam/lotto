@@ -1,6 +1,6 @@
 # 🎰 로또 번호 예측 시스템
 
-<a href="https://www.buymeacoffee.com/teinam" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 40px !important;" ></a>
+<a href="https://www.buymeacoffee.com/teinam" target="_blank">[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/teinam)</a>
 
 ![Python](https://img.shields.io/badge/Python-3.13-blue.svg)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-green.svg)
