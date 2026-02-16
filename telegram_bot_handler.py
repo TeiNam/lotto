@@ -377,7 +377,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "📊 /result [회차] - 특정 회차 결과 확인\n"
         "❓ /help - 명령어 안내\n"
         "🏠 /start - 시작 메시지 표시\n\n"
-        "🔗 GitHub: https://github.com/TeiNam/lotto"
+        "☕ 후원하기: https://buymeacoffee.com/teinam"
     )
     await update.message.reply_text(welcome_message)
 
