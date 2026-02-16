@@ -8,7 +8,7 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from telegram import Update, Bot, BotCommand
+from telegram import Update, Bot, BotCommand, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application, CommandHandler, ContextTypes,
     MessageHandler, filters
@@ -376,10 +376,11 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "📊 /result - 내 예측과 당첨 번호 매칭 확인\n"
         "📊 /result [회차] - 특정 회차 결과 확인\n"
         "❓ /help - 명령어 안내\n"
-        "🏠 /start - 시작 메시지 표시\n\n"
-        "☕ 후원하기: https://buymeacoffee.com/teinam"
+        "🏠 /start - 시작 메시지 표시"
     )
-    await update.message.reply_text(welcome_message)
+    keyboard = [[InlineKeyboardButton("☕ Buy Me a Coffee", url="https://buymeacoffee.com/teinam")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text(welcome_message, reply_markup=reply_markup)
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
