@@ -613,13 +613,19 @@ async def check_winning_command(update: Update, context: ContextTypes.DEFAULT_TY
         numbers = [last_draw[str(i)] for i in range(1, 7)]
         draw_date = last_draw['create_at']
 
+        # 날짜만 표시 (시간 제거)
+        if hasattr(draw_date, 'strftime'):
+            draw_date_str = draw_date.strftime('%Y-%m-%d (토)')
+        else:
+            draw_date_str = str(draw_date).split(' ')[0] + ' (토)'
+
         numbers_str = ", ".join(str(n) for n in sorted(numbers))
         bonus = last_draw.get('bonus')
         bonus_str = f"\n🎯 보너스 번호: {bonus}" if bonus else ""
 
         message = (
             f"🏆 {draw_no}회 당첨 번호\n\n"
-            f"📅 추첨일: {draw_date}\n"
+            f"📅 추첨일: {draw_date_str}\n"
             f"🎱 당첨 번호: [{numbers_str}]{bonus_str}\n\n"
             f"다음 회차는 {draw_no + 1}회입니다."
         )
