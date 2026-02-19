@@ -378,7 +378,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "❓ /help - 명령어 안내\n"
         "🏠 /start - 시작 메시지 표시"
     )
-    keyboard = [[InlineKeyboardButton("☕ Buy Me a Coffee", url="https://buymeacoffee.com/teinam")]]
+    keyboard = [[InlineKeyboardButton("☕ 후원하기 (카카오페이)", url="https://qr.kakaopay.com/Ej74xpc815dc06149")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text(welcome_message, reply_markup=reply_markup)
 
