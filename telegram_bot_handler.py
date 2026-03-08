@@ -315,7 +315,9 @@ def setup_scheduler():
     """스케줄러 설정 (한국 시간 기준)"""
     global scheduler
 
-    scheduler = AsyncIOScheduler()
+    from pytz import timezone as pytz_timezone
+    kst = pytz_timezone('Asia/Seoul')
+    scheduler = AsyncIOScheduler(timezone=kst)
 
     # 매주 월요일 오전 10시: 한 주 시작 알림
     scheduler.add_job(
@@ -358,7 +360,7 @@ def setup_scheduler():
     )
 
     scheduler.start()
-    logger.info("스케줄러 시작됨")
+    logger.info("스케줄러 시작됨 (timezone: Asia/Seoul)")
     logger.info("  - 매주 월요일 10:00: 한 주 시작 알림")
     logger.info("  - 매주 금요일 12:00: 예측 생성 및 텔레그램 전송")
     logger.info("  - 매주 금요일 16:00: 구매 알림")
@@ -370,7 +372,7 @@ def setup_scheduler():
         if next_run:
             logger.info(
                 f"  [{job.name}] 다음 실행: "
-                f"{next_run.strftime('%Y-%m-%d %H:%M:%S')}"
+                f"{next_run.strftime('%Y-%m-%d %H:%M:%S %Z')}"
             )
 
 
