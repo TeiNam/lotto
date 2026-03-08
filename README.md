@@ -1,12 +1,12 @@
 # 🎰 로또 번호 예측 시스템
 
-<a href="https://www.buymeacoffee.com/teinam" target="_blank">[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/teinam)</a>
-
 ![Python](https://img.shields.io/badge/Python-3.13-blue.svg)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-green.svg)
 ![MySQL](https://img.shields.io/badge/MySQL-8.0-orange.svg)
 ![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
+
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/teinam)
 
 로또 번호 예측 시스템은 암호학적으로 안전한 난수 생성과 극단적 패턴 필터링을 통해 로또 번호를 생성하고, Telegram Bot을 통해 자동화된 예측 및 알림 서비스를 제공합니다.
 
@@ -16,8 +16,11 @@
 - 🔍 **극단적 패턴 필터링**: 연속 숫자, 등차수열, 극단적 합계 등 비정상 패턴 제거
 - 🤖 **Telegram Bot**: 대화형 봇을 통한 예측 생성 및 결과 확인
 - ⏰ **자동화 스케줄러**: 
+  - 월요일 10시: 한 주 시작 알림
   - 금요일 12시: 예측 10개 자동 생성 및 전송
-  - 토요일 21시: 당첨번호 자동 업데이트
+  - 금요일 16시: 구매 알림
+  - 토요일 18시: 마감 임박 알림
+  - 토요일 21시: 당첨번호 자동 업데이트 (실패 시 10분 간격 최대 3회 재시도)
 - 🌐 **REST API**: FastAPI 기반 비동기 API
 - 🐳 **Docker 지원**: 원클릭 배포 (API + Bot + MySQL)
 - 📊 **당첨 결과 매칭**: 생성한 번호와 당첨 번호 자동 비교
@@ -67,8 +70,10 @@ docker run -d \
 
 - `/start` - 봇 시작 및 환영 메시지
 - `/generate [개수]` - 로또 번호 생성 (기본 5개, 최대 20개)
+- `/mylist` - 이번 회차 생성된 전체 번호 보기
 - `/winning` - 최신 회차 당첨 번호 확인
 - `/result [회차]` - 예측 결과와 당첨 번호 매칭
+- `/update` - 최신 당첨번호 수동 업데이트
 - `/help` - 명령어 도움말
 
 ### 사용 예시
@@ -77,11 +82,17 @@ docker run -d \
 /generate 10
 → 10개 조합 생성 및 데이터베이스 저장
 
+/mylist
+→ 이번 회차에 생성한 전체 번호 목록
+
 /winning
 → 최신 회차 당첨 번호 확인
 
 /result
 → 내가 생성한 번호와 당첨 번호 매칭 결과
+
+/update
+→ 최신 당첨번호 수동 업데이트 (자동 업데이트 실패 시)
 ```
 
 ## 🔧 환경 변수 설정
@@ -195,15 +206,29 @@ services:
 
 ## 📊 자동화 스케줄
 
+모든 스케줄은 한국 시간(KST, Asia/Seoul) 기준입니다.
+
+### 월요일 10:00
+- 한 주 시작 알림
+- 번호 생성 안내 메시지 발송
+
 ### 금요일 12:00
 - 다음 회차 예측 10개 자동 생성
 - 데이터베이스에 저장
 - Telegram으로 예측 결과 전송
 
+### 금요일 16:00
+- 로또 구매 알림 발송
+
+### 토요일 18:00
+- 구매 마감 임박 알림 발송
+
 ### 토요일 21:00
 - lotto.oot.kr에서 당첨번호 크롤링
 - 데이터베이스에 자동 저장
-- 데이터 서비스 새로고침
+- 당첨번호 업데이트 성공 시 `/result` 확인 안내 메시지 발송
+- 실패 시 10분 간격으로 최대 3회 자동 재시도
+- 모든 재시도 실패 시 `/update` 수동 업데이트 안내
 
 ## 🧪 테스트
 
