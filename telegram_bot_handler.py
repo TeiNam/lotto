@@ -105,9 +105,14 @@ async def send_message_with_retry(
     return False
 
 
-async def update_lottery_results():
-    """토요일 밤 9시 당첨번호 자동 업데이트 및 결과 알림"""
-    logger.info("당첨번호 자동 업데이트 시작")
+async def update_lottery_results(retry_count: int = 0):
+    """토요일 밤 9시 당첨번호 자동 업데이트 및 결과 알림
+    
+    Args:
+        retry_count: 현재 재시도 횟수 (최대 3회)
+    """
+    max_retries = 3
+    logger.info(f"당첨번호 자동 업데이트 시작 (시도 {retry_count + 1}/{max_retries + 1})")
 
     bot = Bot(token=TELEGRAM_BOT_TOKEN)
 
@@ -146,13 +151,37 @@ async def update_lottery_results():
         else:
             logger.warning("당첨번호 업데이트 실패 (미발표 또는 오류)")
 
-            # 실패 알림도 발송
-            fail_message = (
-                "⚠️ 당첨번호 업데이트 실패\n\n"
-                "아직 발표되지 않았거나 조회 중 오류가 발생했습니다.\n"
-                "30분 후 재시도합니다."
-            )
-            await send_message_with_retry(bot, TELEGRAM_CHAT_ID, fail_message)
+            # 재시도 가능하면 10분 후 재시도 스케줄 등록
+            if retry_count < max_retries:
+                next_retry = retry_count + 1
+                retry_minutes = 10
+                logger.info(f"{retry_minutes}분 후 재시도 예정 ({next_retry}/{max_retries})")
+
+                from datetime import timedelta
+                run_time = datetime.now() + timedelta(minutes=retry_minutes)
+                scheduler.add_job(
+                    update_lottery_results,
+                    'date',
+                    run_date=run_time,
+                    args=[next_retry],
+                    id=f'lottery_update_retry_{next_retry}',
+                    name=f'당첨번호 업데이트 재시도 ({next_retry}/{max_retries})',
+                    replace_existing=True
+                )
+
+                fail_message = (
+                    f"⚠️ 당첨번호 업데이트 실패 (시도 {retry_count + 1}/{max_retries + 1})\n\n"
+                    f"아직 발표되지 않았거나 조회 중 오류가 발생했습니다.\n"
+                    f"{retry_minutes}분 후 재시도합니다."
+                )
+                await send_message_with_retry(bot, TELEGRAM_CHAT_ID, fail_message)
+            else:
+                fail_message = (
+                    "❌ 당첨번호 업데이트 최종 실패\n\n"
+                    f"총 {max_retries + 1}회 시도했지만 실패했습니다.\n"
+                    "/update 명령어로 수동 업데이트해주세요."
+                )
+                await send_message_with_retry(bot, TELEGRAM_CHAT_ID, fail_message)
 
     except Exception as e:
         logger.error(f"당첨번호 업데이트 중 오류: {e}", exc_info=True)
@@ -328,22 +357,13 @@ def setup_scheduler():
         name='토요일 밤 9시 당첨번호 업데이트'
     )
 
-    # 토요일 밤 9시 30분: 당첨번호 업데이트 재시도 (첫 시도 실패 대비)
-    scheduler.add_job(
-        update_lottery_results,
-        CronTrigger(day_of_week='sat', hour=21, minute=30),
-        id='saturday_lottery_update_retry',
-        name='토요일 밤 9시 30분 당첨번호 업데이트 재시도'
-    )
-
     scheduler.start()
     logger.info("스케줄러 시작됨")
     logger.info("  - 매주 월요일 10:00: 한 주 시작 알림")
     logger.info("  - 매주 금요일 12:00: 예측 생성 및 텔레그램 전송")
     logger.info("  - 매주 금요일 16:00: 구매 알림")
     logger.info("  - 매주 토요일 18:00: 구매 마감 알림")
-    logger.info("  - 매주 토요일 21:00: 당첨번호 업데이트")
-    logger.info("  - 매주 토요일 21:30: 당첨번호 업데이트 재시도")
+    logger.info("  - 매주 토요일 21:00: 당첨번호 업데이트 (실패 시 10분 간격 최대 3회 재시도)")
 
     for job in scheduler.get_jobs():
         next_run = job.next_run_time
