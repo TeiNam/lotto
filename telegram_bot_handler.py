@@ -375,6 +375,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🏆 /winning - 최신 회차 당첨 번호 확인\n"
         "📊 /result - 내 예측과 당첨 번호 매칭 확인\n"
         "📊 /result [회차] - 특정 회차 결과 확인\n"
+        "🔄 /update - 최신 당첨번호 수동 업데이트\n"
         "❓ /help - 명령어 안내\n"
         "🏠 /start - 시작 메시지 표시"
     )
@@ -394,7 +395,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "📋 내 번호 확인:\n"
         "  /mylist - 이번 회차 생성된 전체 번호 보기\n\n"
         "🏆 당첨 확인:\n"
-        "  /winning - 최신 회차 당첨 번호 확인\n\n"
+        "  /winning - 최신 회차 당첨 번호 확인\n"
+        "  /update - 최신 당첨번호 수동 업데이트\n\n"
         "📊 결과 확인:\n"
         "  /result - 내가 생성한 번호와 당첨 번호 매칭 확인\n"
         "  /result [회차] - 특정 회차 결과 확인\n"
@@ -640,6 +642,41 @@ async def check_winning_command(update: Update, context: ContextTypes.DEFAULT_TY
         )
 
 
+async def update_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """수동 당첨번호 업데이트 명령어 핸들러"""
+    try:
+        await update.message.reply_text("🔄 최신 당첨번호 업데이트 중...")
+
+        success = await LotteryService.update_latest_draw()
+
+        if success:
+            last_draw = await AsyncLottoRepository.get_last_draw()
+            if last_draw:
+                draw_no = last_draw['no']
+                numbers = [last_draw[str(i)] for i in range(1, 7)]
+                numbers_str = ", ".join(str(n) for n in sorted(numbers))
+                bonus = last_draw.get('bonus')
+                bonus_str = f"\n🎯 보너스 번호: {bonus}" if bonus else ""
+
+                message = (
+                    f"✅ 당첨번호 업데이트 완료\n\n"
+                    f"🏆 {draw_no}회 당첨 번호\n"
+                    f"🎱 [{numbers_str}]{bonus_str}"
+                )
+                await update.message.reply_text(message)
+            else:
+                await update.message.reply_text("✅ 업데이트 성공했지만 데이터 조회에 실패했습니다.")
+        else:
+            await update.message.reply_text(
+                "⚠️ 업데이트 실패\n\n"
+                "아직 발표되지 않았거나 이미 최신 상태입니다."
+            )
+
+    except Exception as e:
+        logger.error(f"수동 당첨번호 업데이트 오류: {e}", exc_info=True)
+        await update.message.reply_text(f"❌ 업데이트 중 오류 발생\n{str(e)}")
+
+
 async def check_result_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """결과 확인 명령어 핸들러"""
     try:
@@ -793,6 +830,7 @@ async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🔮 /generate [개수] - 원하는 개수만큼 생성 (최대 20개)\n"
         "📋 /mylist - 이번 회차 내 번호 보기\n"
         "🏆 /winning - 당첨 번호 확인\n"
+        "🔄 /update - 최신 당첨번호 수동 업데이트\n"
         "📊 /result - 내 예측과 당첨 번호 매칭 확인\n"
         "📊 /result [회차] - 특정 회차 결과 확인\n"
         "❓ /help - 명령어 안내\n"
@@ -828,6 +866,7 @@ def main():
         application.add_handler(CommandHandler("mylist", mylist_command))
         application.add_handler(CommandHandler("winning", check_winning_command))
         application.add_handler(CommandHandler("result", check_result_command))
+        application.add_handler(CommandHandler("update", update_command))
 
         # 알 수 없는 명령어 핸들러
         application.add_handler(
