@@ -140,7 +140,8 @@ async def update_lottery_results(retry_count: int = 0):
                 message = (
                     f"🏆 {last_draw_no}회 당첨번호 업데이트\n\n"
                     f"🎱 당첨 번호: [{numbers_str}]{bonus_str}\n"
-                    f"⏰ 업데이트 시각: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+                    f"⏰ 업데이트 시각: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+                    f"📊 /result 명령어로 내 예측 번호와 당첨 결과를 확인해보세요!"
                 )
 
                 sent = await send_message_with_retry(
