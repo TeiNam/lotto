@@ -896,6 +896,12 @@ def _dhl_buy(tickets: List[Dict]) -> List[Dict]:
     return client.buy_lotto645(tickets)
 
 
+def _dhl_buy_list(start_date=None, end_date=None) -> List[Dict]:
+    """(blocking) 동행복권 로그인 후 구매 내역 조회"""
+    client = DhLotteryClient(DHL_USERNAME, DHL_PASSWORD)
+    return client.get_buy_list(start_date, end_date)
+
+
 @restricted
 async def balance_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """동행복권 예치금 잔액 조회"""
@@ -1035,6 +1041,50 @@ async def buy_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 @restricted
+async def buylist_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """구매 내역 조회 (기본 최근 14일)
+
+    /buylist            : 최근 14일 구매 내역
+    /buylist 20250101 20250131 : 기간 지정(YYYYMMDD)
+    """
+    if not (DHL_USERNAME and DHL_PASSWORD):
+        await update.message.reply_text(
+            "동행복권 계정이 설정되지 않았습니다. (.env의 DHL_USERNAME/DHL_PASSWORD)"
+        )
+        return
+
+    args = context.args or []
+    start_date = args[0] if len(args) >= 1 else None
+    end_date = args[1] if len(args) >= 2 else None
+
+    msg = await update.message.reply_text("📜 구매 내역 조회 중...")
+    try:
+        rows = await asyncio.to_thread(_dhl_buy_list, start_date, end_date)
+        if not rows:
+            await msg.edit_text("해당 기간에 구매 내역이 없습니다.")
+            return
+
+        lines = [f"📜 구매 내역 ({len(rows)}건)", ""]
+        for r in rows:
+            amount = r["amount"]
+            amt_str = f" / 당첨금 {amount:,}원" if amount else ""
+            lines.append(
+                f"• {r['date']} {r['round']}회 {r['name']}\n"
+                f"  매수 {r['qty']} · {r['result']}{amt_str}"
+            )
+        text = "\n".join(lines)
+        # 텔레그램 메시지 길이 제한 대응
+        if len(text) > 4000:
+            text = text[:3900] + "\n\n…(이하 생략, 기간을 좁혀 조회하세요)"
+        await msg.edit_text(text)
+    except DhLotteryError as e:
+        await msg.edit_text(f"❌ 구매 내역 조회 실패\n{e.message}")
+    except Exception as e:
+        logger.error(f"구매 내역 조회 오류: {e}", exc_info=True)
+        await msg.edit_text("❌ 구매 내역 조회 중 알 수 없는 오류가 발생했습니다.")
+
+
+@restricted
 async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """알 수 없는 명령어 핸들러"""
     message = (
@@ -1083,6 +1133,7 @@ def main():
         application.add_handler(CommandHandler("update", update_command))
         application.add_handler(CommandHandler("balance", balance_command))
         application.add_handler(CommandHandler("buy", buy_command))
+        application.add_handler(CommandHandler("buylist", buylist_command))
         application.add_handler(CallbackQueryHandler(buy_callback, pattern="^buy_"))
 
         # 알 수 없는 명령어 핸들러
@@ -1105,6 +1156,7 @@ def main():
             BotCommand("result", "결과 확인"),
             BotCommand("balance", "동행복권 예치금 조회"),
             BotCommand("buy", "로또645 구매"),
+            BotCommand("buylist", "구매 내역 조회"),
             BotCommand("help", "명령어 안내"),
         ]
         await application.bot.set_my_commands(bot_commands)

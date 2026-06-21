@@ -36,6 +36,8 @@ class DhLotteryClient:
     _ready_socket = "https://ol.dhlottery.co.kr/olotto/game/egovUserReadySocket.json"
     _buy_url = "https://ol.dhlottery.co.kr/olotto/game/execBuy.do"
     _balance_url = "https://www.dhlottery.co.kr/mypage/selectUserMndp.do"
+    _buy_list_page = "https://www.dhlottery.co.kr/mypage/mylotteryledger"
+    _buy_list_url = "https://www.dhlottery.co.kr/mypage/selectMyLotteryledger.do"
 
     def __init__(self, user_id: str, user_pw: str):
         self._user_id = user_id
@@ -158,6 +160,61 @@ class DhLotteryClient:
             raise
         except Exception as e:
             raise DhLotteryError(f"예치금 조회 중 오류: {e}", original_error=e)
+
+    # --- 구매 내역 조회 ---
+
+    def get_buy_list(self, start_date: Optional[str] = None, end_date: Optional[str] = None) -> List[Dict]:
+        """구매 내역 조회 (기본 최근 14일)
+
+        Args:
+            start_date, end_date: "YYYYMMDD" 형식. 생략 시 최근 14일.
+        Returns:
+            [{"date","name","round","qty","result","amount"}] 리스트 (최신순)
+        """
+        self._ensure_login()
+        today = datetime.datetime.now(_KST).date()
+        try:
+            start = (datetime.datetime.strptime(start_date, "%Y%m%d").date()
+                     if start_date else today - datetime.timedelta(days=14))
+            end = (datetime.datetime.strptime(end_date, "%Y%m%d").date()
+                   if end_date else today)
+        except ValueError:
+            raise DhLotteryError("날짜 형식이 올바르지 않습니다 (YYYYMMDD).")
+
+        headers = {
+            "Accept": "application/json, text/javascript, */*; q=0.01",
+            "X-Requested-With": "XMLHttpRequest",
+            "Referer": self._buy_list_page,
+        }
+        try:
+            self._session.get(self._buy_list_page, timeout=10)  # 세션 준비
+            params = {
+                "srchStrDt": start.strftime("%Y%m%d"),
+                "srchEndDt": end.strftime("%Y%m%d"),
+                "pageNum": 1,
+                "recordCountPerPage": 100,
+                "_": int(datetime.datetime.now().timestamp() * 1000),
+            }
+            resp = self._session.get(self._buy_list_url, params=params, headers=headers, timeout=10)
+            if resp.status_code != 200 or "json" not in resp.headers.get("Content-Type", "").lower():
+                raise DhLotteryError("구매 내역 API 응답 오류 (세션 만료 가능)")
+
+            items = (resp.json().get("data", {}) or {}).get("list", []) or []
+            result = []
+            for it in items:
+                result.append({
+                    "date": it.get("eltOrdrDt", ""),
+                    "name": it.get("ltGdsNm", ""),
+                    "round": it.get("ltEpsdView", ""),
+                    "qty": it.get("prchsQty", ""),
+                    "result": it.get("ltWnResult", "") or "미추첨",
+                    "amount": it.get("ltWnAmt", 0) or 0,
+                })
+            return result
+        except DhLotteryError:
+            raise
+        except Exception as e:
+            raise DhLotteryError(f"구매 내역 조회 중 오류: {e}", original_error=e)
 
     # --- 구매 ---
 
