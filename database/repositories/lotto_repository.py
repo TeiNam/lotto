@@ -249,7 +249,8 @@ class AsyncLottoRepository:
             pool = await AsyncDatabaseConnector.get_pool()
 
             async with pool.acquire() as conn:
-                async with conn.cursor() as cursor:
+                # 호출처가 결과를 딕셔너리로 접근하므로 DictCursor 사용
+                async with conn.cursor(aiomysql.DictCursor) as cursor:
                     await cursor.execute(query, params or ())
                     results = await cursor.fetchall()
                     return results

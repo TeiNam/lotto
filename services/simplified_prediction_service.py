@@ -78,11 +78,19 @@ class SimplifiedPredictionService:
         start_time = datetime.now()
         predictions = []
         generated_combinations = set()  # 배치 내 중복 방지
-        
+
+        # 직전 회차 당첨 번호 (3개 이상 겹치는 조합 제외용)
+        last_draw = self.data_service.get_last_draw()
+        prev_numbers = set(last_draw.numbers) if last_draw else set()
+        if prev_numbers:
+            logger.info(f"직전 회차 당첨 번호: {sorted(prev_numbers)} (3개 이상 겹침 제외)")
+
         try:
             for i in range(num_predictions):
                 # 단일 예측 생성 (중복 방지)
-                combination = await self._generate_single_prediction(generated_combinations)
+                combination = await self._generate_single_prediction(
+                    generated_combinations, prev_numbers
+                )
                 
                 # 생성된 조합 추가
                 generated_combinations.add(tuple(combination))
@@ -118,14 +126,17 @@ class SimplifiedPredictionService:
     
     async def _generate_single_prediction(
         self,
-        generated_combinations: set
+        generated_combinations: set,
+        prev_numbers: Optional[set] = None
     ) -> List[int]:
         """중복되지 않은 단일 예측 생성
         
-        과거 당첨 번호 및 이미 생성된 조합과 중복되지 않는 조합을 생성합니다.
+        과거 당첨 번호, 이미 생성된 조합, 직전 회차 번호와의 과도한 겹침을
+        모두 피하는 조합을 생성합니다.
         
         Args:
             generated_combinations: 이미 생성된 조합들의 집합 (튜플 형태)
+            prev_numbers: 직전 회차 당첨 번호 집합 (3개 이상 겹치면 제외)
             
         Returns:
             유효한 6개 숫자 조합
@@ -134,6 +145,7 @@ class SimplifiedPredictionService:
             PredictionGenerationError: 최대 재시도 횟수 초과 시
         """
         retry_count = 0
+        prev_numbers = prev_numbers or set()
         
         while retry_count < self.max_retries:
             # 랜덤 조합 생성 (극단적 패턴 자동 필터링)
@@ -146,6 +158,15 @@ class SimplifiedPredictionService:
                 retry_count += 1
                 logger.debug(
                     f"과거 당첨 번호와 중복: {combination}, "
+                    f"재시도 {retry_count}/{self.max_retries}"
+                )
+                continue
+            
+            # 직전 회차와 3개 이상 겹치면 제외
+            if len(prev_numbers.intersection(combination)) >= 3:
+                retry_count += 1
+                logger.debug(
+                    f"직전 회차와 3개 이상 겹침: {combination}, "
                     f"재시도 {retry_count}/{self.max_retries}"
                 )
                 continue
