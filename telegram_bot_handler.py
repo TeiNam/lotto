@@ -407,7 +407,12 @@ def restricted(func):
             if update.callback_query:
                 await update.callback_query.answer("⛔ 권한이 없습니다.", show_alert=True)
             elif update.message:
-                await update.message.reply_text("⛔ 이 봇은 관리자 전용입니다.")
+                await update.message.reply_text(
+                    "⛔ 이 봇은 관리자 전용입니다.\n"
+                    f"당신의 user_id: `{uid}`\n\n"
+                    "관리자라면 이 값을 .env의 TELEGRAM_ADMIN_IDS에 추가하세요.",
+                    parse_mode="Markdown",
+                )
             return
         return await func(update, context, *args, **kwargs)
     return wrapped
