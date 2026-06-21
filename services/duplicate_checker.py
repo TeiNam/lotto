@@ -3,6 +3,7 @@ import logging
 from typing import List, Set, Tuple, Optional
 from datetime import datetime, timedelta
 from services.data_service import AsyncDataService
+from config.settings import KST
 
 logger = logging.getLogger("lotto_prediction")
 
@@ -32,7 +33,7 @@ class DuplicateChecker:
         Returns:
             정렬된 튜플 형태의 당첨 번호 집합
         """
-        now = datetime.now()
+        now = datetime.now(KST)
         
         # 캐시가 없거나 만료된 경우 새로 로드
         if (self._winning_cache is None or 

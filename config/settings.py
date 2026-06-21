@@ -2,11 +2,15 @@
 import os
 from dotenv import load_dotenv
 import logging
+from zoneinfo import ZoneInfo
 from utils.exceptions import ConfigurationError
 
 load_dotenv()
 
 logger = logging.getLogger("lotto_prediction")
+
+# 한국 표준시 (모든 시각 계산/표시에 사용 - DB/컨테이너 타임존과 무관하게 KST 고정)
+KST = ZoneInfo("Asia/Seoul")
 
 # 데이터베이스 설정
 DB_CONFIG = {

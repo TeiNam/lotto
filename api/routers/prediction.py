@@ -2,6 +2,7 @@
 import logging
 import time
 from datetime import datetime
+from config.settings import KST
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
@@ -190,7 +191,7 @@ async def health_check():
         return {
             "status": "healthy",
             "database": "connected",
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now(KST).isoformat()
         }
     except Exception as e:
         logger.error(f"헬스 체크 실패: {e}")

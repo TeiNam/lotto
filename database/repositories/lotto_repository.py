@@ -1,9 +1,11 @@
 # database/repositories/lotto_repository.py
 import logging
 import aiomysql
+from datetime import datetime
 from typing import List, Dict, Any, Optional
 
 from database.connector import AsyncDatabaseConnector
+from config.settings import KST
 from utils.exceptions import DatabaseError
 
 logger = logging.getLogger("lotto_prediction")
@@ -94,11 +96,13 @@ class AsyncLottoRepository:
         sorted_numbers = sorted(numbers)
 
         query = """
-        INSERT INTO recommand (next_no, user_id, `1`, `2`, `3`, `4`, `5`, `6`) 
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO recommand (next_no, user_id, `1`, `2`, `3`, `4`, `5`, `6`, create_at) 
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
 
-        params = (next_no, user_id, *sorted_numbers)
+        # create_at을 KST로 명시 저장 (MySQL 세션 타임존이 UTC여도 KST로 고정)
+        kst_now = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
+        params = (next_no, user_id, *sorted_numbers, kst_now)
 
         try:
             result = await AsyncDatabaseConnector.execute_query(query, params, fetch=False)

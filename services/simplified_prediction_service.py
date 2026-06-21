@@ -13,6 +13,7 @@ from services.random_generator import RandomGenerator
 from services.duplicate_checker import DuplicateChecker
 from services.data_service import AsyncDataService
 from models.prediction import LottoPrediction
+from config.settings import KST
 from utils.exceptions import ValidationError, PredictionGenerationError
 
 logger = logging.getLogger("lotto_prediction")
@@ -75,7 +76,7 @@ class SimplifiedPredictionService:
             f"예측 생성 요청: num_predictions={num_predictions}, user_id={user_id}"
         )
         
-        start_time = datetime.now()
+        start_time = datetime.now(KST)
         predictions = []
         generated_combinations = set()  # 배치 내 중복 방지
 
@@ -106,7 +107,7 @@ class SimplifiedPredictionService:
                 
                 logger.debug(f"예측 {i+1}/{num_predictions} 생성 완료: {combination}")
             
-            elapsed_time = (datetime.now() - start_time).total_seconds() * 1000
+            elapsed_time = (datetime.now(KST) - start_time).total_seconds() * 1000
             logger.info(
                 f"예측 생성 완료: {len(predictions)}개 생성, "
                 f"소요 시간: {elapsed_time:.2f}ms"

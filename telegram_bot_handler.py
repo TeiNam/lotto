@@ -19,7 +19,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 from config.settings import (
     TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, TELEGRAM_ADMIN_IDS,
-    DHL_USERNAME, DHL_PASSWORD,
+    DHL_USERNAME, DHL_PASSWORD, KST,
 )
 from database.repositories.lotto_repository import AsyncLottoRepository
 from services.data_service import AsyncDataService
@@ -146,7 +146,7 @@ async def update_lottery_results(retry_count: int = 0):
                 message = (
                     f"🏆 {last_draw_no}회 당첨번호 업데이트\n\n"
                     f"🎱 당첨 번호: [{numbers_str}]{bonus_str}\n"
-                    f"⏰ 업데이트 시각: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+                    f"⏰ 업데이트 시각: {datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S')}\n\n"
                     f"📊 /result 명령어로 내 예측 번호와 당첨 결과를 확인해보세요!"
                 )
 
@@ -165,7 +165,7 @@ async def update_lottery_results(retry_count: int = 0):
                 logger.info(f"{retry_minutes}분 후 재시도 예정 ({next_retry}/{max_retries})")
 
                 from datetime import timedelta
-                run_time = datetime.now() + timedelta(minutes=retry_minutes)
+                run_time = datetime.now(KST) + timedelta(minutes=retry_minutes)
                 scheduler.add_job(
                     update_lottery_results,
                     'date',
@@ -239,7 +239,7 @@ async def generate_weekly_predictions():
         logger.info(f"예측 생성 완료: {saved_count}/{len(predictions)}개 저장")
 
         # 메시지 구성
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        timestamp = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
         message_lines = [
             f"🎰 {next_draw_no}회 주간 예측",
             "",
@@ -512,7 +512,7 @@ async def generate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logger.error(f"예측 저장 실패: {e}")
 
         # 결과 메시지
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        timestamp = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
         message_lines = [
             f"🎰 {next_draw_no}회 예측 결과",
             "",

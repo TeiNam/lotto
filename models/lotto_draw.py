@@ -2,6 +2,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 from typing import List, Tuple, Dict, Any
+from config.settings import KST
 from utils.exceptions import ValidationError
 import logging
 
@@ -45,7 +46,7 @@ class LottoDraw:
             # 날짜 필드 검증
             if 'create_at' not in row:
                 logger.warning(f"날짜 필드(create_at)가 없습니다. 현재 시간을 사용합니다. 회차: {row['no']}")
-                draw_date = datetime.now()
+                draw_date = datetime.now(KST)
             else:
                 draw_date = row['create_at']
                 if not isinstance(draw_date, datetime):
@@ -53,7 +54,7 @@ class LottoDraw:
                         draw_date = datetime.fromisoformat(str(draw_date))
                     except:
                         logger.warning(f"날짜 변환 실패. 현재 시간을 사용합니다. 회차: {row['no']}")
-                        draw_date = datetime.now()
+                        draw_date = datetime.now(KST)
 
             return cls(
                 draw_no=row['no'],

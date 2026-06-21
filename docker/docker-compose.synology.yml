@@ -5,7 +5,7 @@ services:
   # 통합 서비스 (API + Bot)
   app:
     image: ghcr.io/teinam/lotto:latest
-    container_name: lotto-app
+    container_name: lotto-telegram-bot
     restart: unless-stopped
     ports:
       - "8000:8000"
