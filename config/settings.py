@@ -34,6 +34,34 @@ TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 
+def _parse_admin_ids(raw: str) -> set:
+    """쉼표로 구분된 관리자 텔레그램 user_id 목록을 정수 set으로 파싱"""
+    ids = set()
+    for part in (raw or "").replace(" ", "").split(","):
+        if not part:
+            continue
+        try:
+            ids.add(int(part))
+        except ValueError:
+            logger.warning(f"잘못된 TELEGRAM_ADMIN_IDS 항목 무시: {part}")
+    return ids
+
+
+# 봇 사용 허용 관리자(텔레그램 user_id) 목록. 비어 있으면 모든 사용자 차단.
+TELEGRAM_ADMIN_IDS = _parse_admin_ids(os.getenv("TELEGRAM_ADMIN_IDS", ""))
+
+# TELEGRAM_ADMIN_IDS 미설정 시, 개인 채팅용 TELEGRAM_CHAT_ID를 관리자로 사용한다.
+# (1:1 DM에서는 chat_id == user_id 이므로. 단, 그룹 chat_id(음수)는 user_id가 아니라 제외)
+if not TELEGRAM_ADMIN_IDS and TELEGRAM_CHAT_ID:
+    _chat_id = str(TELEGRAM_CHAT_ID).strip()
+    if _chat_id.isdigit():  # 양수(개인)만 해당
+        TELEGRAM_ADMIN_IDS = {int(_chat_id)}
+
+# 동행복권 계정 (운영자 본인 단일 계정). 구매/잔액조회에 사용.
+DHL_USERNAME = os.getenv("DHL_USERNAME")
+DHL_PASSWORD = os.getenv("DHL_PASSWORD")
+
+
 def verify_required_env_vars():
     """필수 환경 변수 검증"""
     required_vars = ["DB_HOST", "DB_USER", "DB_PASSWORD", "DB_NAME"]

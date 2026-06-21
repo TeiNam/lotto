@@ -6,23 +6,29 @@
 import asyncio
 import logging
 from datetime import datetime
+from functools import wraps
 from typing import Any, Dict, List, Optional
 
 from telegram import Update, Bot, BotCommand, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application, CommandHandler, ContextTypes,
-    MessageHandler, filters
+    MessageHandler, CallbackQueryHandler, filters
 )
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from config.settings import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
+from config.settings import (
+    TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, TELEGRAM_ADMIN_IDS,
+    DHL_USERNAME, DHL_PASSWORD,
+)
 from database.repositories.lotto_repository import AsyncLottoRepository
 from services.data_service import AsyncDataService
 from services.random_generator import RandomGenerator
 from services.duplicate_checker import DuplicateChecker
 from services.simplified_prediction_service import SimplifiedPredictionService
 from services.lottery_service import LotteryService
+from services.dhlottery_client import DhLotteryClient
+from utils.exceptions import DhLotteryError
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -387,6 +393,27 @@ def stop_scheduler():
 
 # -- 명령어 핸들러 --
 
+def restricted(func):
+    """관리자(allowlist) 전용 핸들러로 제한하는 데코레이터
+
+    TELEGRAM_ADMIN_IDS에 없는 사용자의 모든 명령/콜백을 차단한다.
+    """
+    @wraps(func)
+    async def wrapped(update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
+        user = update.effective_user
+        uid = user.id if user else None
+        if uid not in TELEGRAM_ADMIN_IDS:
+            logger.warning(f"비인가 접근 차단: user_id={uid}, username={getattr(user, 'username', None)}")
+            if update.callback_query:
+                await update.callback_query.answer("⛔ 권한이 없습니다.", show_alert=True)
+            elif update.message:
+                await update.message.reply_text("⛔ 이 봇은 관리자 전용입니다.")
+            return
+        return await func(update, context, *args, **kwargs)
+    return wrapped
+
+
+@restricted
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """시작 명령어 핸들러"""
     welcome_message = (
@@ -407,6 +434,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(welcome_message, reply_markup=reply_markup)
 
 
+@restricted
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """도움말 명령어 핸들러"""
     help_message = (
@@ -432,6 +460,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(help_message)
 
 
+@restricted
 async def generate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """예측 생성 명령어 핸들러"""
     try:
@@ -509,6 +538,7 @@ async def generate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 
+@restricted
 async def mylist_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """이번 회차 생성된 전체 번호 조회 명령어 핸들러"""
     try:
@@ -626,6 +656,7 @@ def _determine_rank(matches: int, bonus_match: bool) -> str:
 
 
 
+@restricted
 async def check_winning_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """당첨 번호 확인 명령어 핸들러"""
     try:
@@ -665,6 +696,7 @@ async def check_winning_command(update: Update, context: ContextTypes.DEFAULT_TY
         )
 
 
+@restricted
 async def update_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """수동 당첨번호 업데이트 명령어 핸들러"""
     try:
@@ -700,6 +732,7 @@ async def update_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"❌ 업데이트 중 오류 발생\n{str(e)}")
 
 
+@restricted
 async def check_result_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """결과 확인 명령어 핸들러"""
     try:
@@ -844,6 +877,159 @@ async def _get_winning_numbers(draw_no: int) -> Optional[Dict[str, Any]]:
         return None
 
 
+# --- 동행복권 잔액조회 / 구매 ---
+
+def _dhl_get_balance() -> Dict[str, int]:
+    """(blocking) 동행복권 로그인 후 예치금 조회"""
+    client = DhLotteryClient(DHL_USERNAME, DHL_PASSWORD)
+    return client.get_balance()
+
+
+def _dhl_buy(tickets: List[Dict]) -> List[Dict]:
+    """(blocking) 동행복권 로그인 후 로또645 구매"""
+    client = DhLotteryClient(DHL_USERNAME, DHL_PASSWORD)
+    return client.buy_lotto645(tickets)
+
+
+@restricted
+async def balance_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """동행복권 예치금 잔액 조회"""
+    if not (DHL_USERNAME and DHL_PASSWORD):
+        await update.message.reply_text(
+            "동행복권 계정이 설정되지 않았습니다. (.env의 DHL_USERNAME/DHL_PASSWORD)"
+        )
+        return
+    msg = await update.message.reply_text("💰 예치금 조회 중...")
+    try:
+        bal = await asyncio.to_thread(_dhl_get_balance)
+        await msg.edit_text(
+            "💰 동행복권 예치금\n\n"
+            f"총 예치금: {bal['total']:,}원\n"
+            f"구매가능 금액: {bal['purchasable']:,}원\n"
+            f"예약구매 금액: {bal['reserved']:,}원\n"
+            f"출금신청중: {bal['withdrawing']:,}원"
+        )
+    except DhLotteryError as e:
+        await msg.edit_text(f"❌ 예치금 조회 실패\n{e.message}")
+    except Exception as e:
+        logger.error(f"예치금 조회 오류: {e}", exc_info=True)
+        await msg.edit_text("❌ 예치금 조회 중 알 수 없는 오류가 발생했습니다.")
+
+
+@restricted
+async def buy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """로또645 구매 (잔액 확인 후 확인 절차를 거쳐 구매)
+
+    /buy           : 이번 회차 내 추천번호(/mylist) 최대 5장을 수동 구매
+    /buy auto [개수] : 자동 [개수]장 구매 (기본 5, 최대 5)
+    """
+    if not (DHL_USERNAME and DHL_PASSWORD):
+        await update.message.reply_text(
+            "동행복권 계정이 설정되지 않았습니다. (.env의 DHL_USERNAME/DHL_PASSWORD)"
+        )
+        return
+
+    args = context.args or []
+    tickets: List[Dict] = []
+    preview_lines: List[str] = []
+
+    if args and args[0].lower() == "auto":
+        count = 5
+        if len(args) > 1:
+            try:
+                count = int(args[1])
+            except ValueError:
+                await update.message.reply_text("개수는 숫자여야 합니다. 예: /buy auto 3")
+                return
+        if not 1 <= count <= 5:
+            await update.message.reply_text("구매 매수는 1~5장입니다.")
+            return
+        tickets = [{"mode": "auto", "numbers": []} for _ in range(count)]
+        preview_lines = [f"{i+1}. 자동" for i in range(count)]
+    else:
+        last_draw = await AsyncLottoRepository.get_last_draw()
+        if not last_draw:
+            await update.message.reply_text("당첨 번호 정보를 찾을 수 없습니다.")
+            return
+        next_no = last_draw["no"] + 1
+        preds = await AsyncLottoRepository.get_recommendations_for_draw(
+            next_no, user_id=update.effective_user.id
+        )
+        if not preds:
+            await update.message.reply_text(
+                f"{next_no}회차 추천번호가 없습니다.\n"
+                "/generate 로 먼저 생성하거나 /buy auto 로 자동 구매하세요."
+            )
+            return
+        chosen = preds[:5]  # 최대 5장
+        tickets = [{"mode": "manual", "numbers": p["numbers"]} for p in chosen]
+        preview_lines = [
+            f"{i+1}. [{', '.join(map(str, p['numbers']))}] 수동"
+            for i, p in enumerate(chosen)
+        ]
+
+    cost = 1000 * len(tickets)
+
+    # 잔액 확인 (돈이 있을 때만 구매)
+    try:
+        bal = await asyncio.to_thread(_dhl_get_balance)
+    except DhLotteryError as e:
+        await update.message.reply_text(f"❌ 예치금 조회 실패\n{e.message}")
+        return
+
+    if bal["purchasable"] < cost:
+        await update.message.reply_text(
+            "❌ 예치금이 부족합니다.\n"
+            f"구매가능: {bal['purchasable']:,}원 / 필요: {cost:,}원"
+        )
+        return
+
+    # 구매 확정 전 확인 (금전 거래이므로 명시적 확인 필수)
+    context.user_data["pending_buy"] = tickets
+    keyboard = InlineKeyboardMarkup([[
+        InlineKeyboardButton("✅ 구매 확정", callback_data="buy_confirm"),
+        InlineKeyboardButton("❌ 취소", callback_data="buy_cancel"),
+    ]])
+    await update.message.reply_text(
+        f"🛒 구매 확인 ({len(tickets)}장 / {cost:,}원)\n\n"
+        + "\n".join(preview_lines)
+        + f"\n\n구매가능 잔액: {bal['purchasable']:,}원\n\n진행할까요?",
+        reply_markup=keyboard,
+    )
+
+
+@restricted
+async def buy_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """구매 확정/취소 콜백 처리"""
+    query = update.callback_query
+    await query.answer()
+
+    if query.data == "buy_cancel":
+        context.user_data.pop("pending_buy", None)
+        await query.edit_message_text("구매가 취소되었습니다.")
+        return
+
+    tickets = context.user_data.pop("pending_buy", None)
+    if not tickets:
+        await query.edit_message_text("구매 정보가 만료되었습니다. /buy 를 다시 실행해주세요.")
+        return
+
+    await query.edit_message_text("🛒 구매 진행 중...")
+    try:
+        slots = await asyncio.to_thread(_dhl_buy, tickets)
+        lines = ["✅ 구매 완료!", ""]
+        for s in slots:
+            lines.append(f"[{s['slot']}] {s['mode']}: {', '.join(s['numbers'])}")
+        await query.edit_message_text("\n".join(lines))
+        logger.info(f"로또 구매 완료: {len(slots)}장, user_id={update.effective_user.id}")
+    except DhLotteryError as e:
+        await query.edit_message_text(f"❌ 구매 실패\n{e.message}")
+    except Exception as e:
+        logger.error(f"구매 오류: {e}", exc_info=True)
+        await query.edit_message_text("❌ 구매 중 알 수 없는 오류가 발생했습니다.")
+
+
+@restricted
 async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """알 수 없는 명령어 핸들러"""
     message = (
@@ -890,6 +1076,9 @@ def main():
         application.add_handler(CommandHandler("winning", check_winning_command))
         application.add_handler(CommandHandler("result", check_result_command))
         application.add_handler(CommandHandler("update", update_command))
+        application.add_handler(CommandHandler("balance", balance_command))
+        application.add_handler(CommandHandler("buy", buy_command))
+        application.add_handler(CallbackQueryHandler(buy_callback, pattern="^buy_"))
 
         # 알 수 없는 명령어 핸들러
         application.add_handler(
@@ -909,6 +1098,8 @@ def main():
             BotCommand("mylist", "이번 회차 내 번호 보기"),
             BotCommand("winning", "당첨 번호 확인"),
             BotCommand("result", "결과 확인"),
+            BotCommand("balance", "동행복권 예치금 조회"),
+            BotCommand("buy", "로또645 구매"),
             BotCommand("help", "명령어 안내"),
         ]
         await application.bot.set_my_commands(bot_commands)

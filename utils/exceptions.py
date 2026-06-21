@@ -41,3 +41,7 @@ class SlackNotificationError(LottoPredictionError):
 class SchedulerError(LottoPredictionError):
     """스케줄러 작업 중 발생한 오류"""
     pass
+
+class DhLotteryError(LottoPredictionError):
+    """동행복권 로그인/조회/구매 중 발생한 오류"""
+    pass
