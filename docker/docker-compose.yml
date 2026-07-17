@@ -1,77 +1,19 @@
-# docker-compose.yml - 통합 이미지 사용
-version: '3.8'
-
+# docker-compose.yml - GHCR 이미지 + .env 주입 (외부 MySQL 사용)
+# 실행: docker compose -f docker/docker-compose.yml up -d
+# ponytail: DB는 .env의 외부 호스트를 씀 → DB 컨테이너 불필요. 로컬 DB가 필요하면 git history 참조.
 services:
-  # 통합 서비스 (API + Bot)
   app:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
-    container_name: lotto-app
+    image: ghcr.io/teinam/lotto:latest
+    container_name: lotto-telegram-bot
     restart: unless-stopped
+    pull_policy: always
     ports:
       - "8000:8000"
-    environment:
-      - DB_HOST=db
-      - DB_USER=${DB_USER:-lotto}
-      - DB_PASSWORD=${DB_PASSWORD:-lotto_password}
-      - DB_NAME=${DB_NAME:-lotto}
-      - DB_PORT=3306
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
-      - TELEGRAM_ADMIN_IDS=${TELEGRAM_ADMIN_IDS}
-      - DHL_USERNAME=${DHL_USERNAME}
-      - DHL_PASSWORD=${DHL_PASSWORD}
-    depends_on:
-      db:
-        condition: service_healthy
-    networks:
-      - lotto-network
+    env_file:
+      - ../.env
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
-    volumes:
-      # 로그 볼륨 (선택사항)
-      - app_logs:/var/log/supervisor
-
-  # MySQL 데이터베이스
-  db:
-    image: mysql:8.0.40
-    container_name: lotto-db
-    restart: unless-stopped
-    ports:
-      - "3306:3306"
-    environment:
-      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-root_password}
-      - MYSQL_DATABASE=${DB_NAME:-lotto}
-      - MYSQL_USER=${DB_USER:-lotto}
-      - MYSQL_PASSWORD=${DB_PASSWORD:-lotto_password}
-      - TZ=Asia/Seoul
-    volumes:
-      - mysql_data:/var/lib/mysql
-      - ./mysql/init:/docker-entrypoint-initdb.d
-    networks:
-      - lotto-network
-    command: 
-      - --default-authentication-plugin=mysql_native_password
-      - --character-set-server=utf8mb4
-      - --collation-server=utf8mb4_general_ci
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-root_password}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-
-networks:
-  lotto-network:
-    driver: bridge
-
-volumes:
-  mysql_data:
-    driver: local
-  app_logs:
-    driver: local
