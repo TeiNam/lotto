@@ -223,13 +223,16 @@ async def generate_weekly_predictions():
         last_draw = await AsyncLottoRepository.get_last_draw()
         next_draw_no = last_draw['no'] + 1 if last_draw else 1
 
-        # DB 저장
+        # DB 저장 — 자동생성분은 채팅방 소유자(TELEGRAM_CHAT_ID)에게 귀속시켜 /mylist에 노출
+        # ponytail: TELEGRAM_CHAT_ID는 os.getenv 문자열이라 조회 쪽 int user_id와 맞추려면 int() 변환 필수
+        owner_id = int(TELEGRAM_CHAT_ID) if TELEGRAM_CHAT_ID else None
         saved_count = 0
         for pred in predictions:
             try:
                 success = await AsyncLottoRepository.save_recommendation(
                     numbers=pred.combination,
-                    next_no=next_draw_no
+                    next_no=next_draw_no,
+                    user_id=owner_id
                 )
                 if success:
                     saved_count += 1
