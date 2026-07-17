@@ -213,3 +213,11 @@ cython_debug/
 # Kiro IDE
 .kiro/
 
+# Claude Code
+.claude/
+CLAUDE.md
+.mcp.json
+
+# macOS
+.DS_Store
+
