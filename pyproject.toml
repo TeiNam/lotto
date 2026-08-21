@@ -1,0 +1,39 @@
+[project]
+name = "lotto"
+version = "1.0.0"
+description = "한국 로또 6/45 번호 예측 + Telegram 봇 자동화"
+requires-python = ">=3.13"
+dependencies = [
+    # 하한선 = 실제로 검증한 버전 (정확한 핀은 uv.lock 이 보유)
+    "aiohttp>=3.14.3",
+    "aiomysql>=0.3.2",
+    "APScheduler>=3.11.3",
+    "cryptography>=50.0.0",
+    "fastapi>=0.141.1",
+    "pydantic>=2.13.4",
+    "python-dotenv>=1.2.3",
+    "python-telegram-bot>=22.8",
+    "pytz>=2026.3",
+    "requests>=2.34.2",
+    "supervisor>=4.3.0",
+    "uvicorn>=0.52.4",
+]
+
+[dependency-groups]
+dev = [
+    "hypothesis>=6.122.4",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "pytest-cov>=7.0.0",
+    "pytest-mock>=3.12.0",
+]
+
+# 애플리케이션이므로 프로젝트 자체를 패키지로 빌드하지 않는다
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# 리포지토리 루트를 sys.path 에 추가 (conftest 없이도 `from services...` import 가능)
+pythonpath = ["."]
+asyncio_mode = "strict"

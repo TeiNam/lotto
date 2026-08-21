@@ -1,31 +1,26 @@
 # Multi-stage build for optimized image size
-FROM python:3.13.2-slim AS builder
+FROM python:3.13-slim AS builder
+
+# uv 바이너리만 가져온다 (빌더 스테이지에서만 사용)
+COPY --from=ghcr.io/astral-sh/uv:0.12.5 /uv /bin/uv
 
 WORKDIR /app
 
-# 빌드 의존성 설치
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+# uv 설정
+#  - UV_PROJECT_ENVIRONMENT: supervisord.conf 가 참조하는 /venv 경로에 그대로 생성
+#  - UV_COMPILE_BYTECODE: 런타임 첫 import 를 빠르게
+#  - UV_PYTHON_DOWNLOADS=never: 베이스 이미지의 python 을 그대로 사용
+ENV UV_PROJECT_ENVIRONMENT=/venv \
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PYTHON_DOWNLOADS=never
 
-# 파이썬 환경 설정
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=off \
-    PIP_DISABLE_PIP_VERSION_CHECK=on
-
-# 가상 환경 생성 및 의존성 설치
-RUN python -m venv /venv
-ENV PATH="/venv/bin:$PATH"
-
-COPY requirements.txt .
-RUN pip install --upgrade pip setuptools && \
-    pip install -r requirements.txt && \
-    pip install supervisor
+# 의존성만 먼저 설치 (소스가 바뀌어도 이 레이어는 캐시된다)
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev
 
 # Runtime stage
-FROM python:3.13.2-slim
+FROM python:3.13-slim
 
 WORKDIR /app
 

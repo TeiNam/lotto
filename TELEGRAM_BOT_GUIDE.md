@@ -15,11 +15,11 @@
 ### 2. Bot 서버 실행
 
 ```bash
-# 패키지 설치
-pip install python-telegram-bot==21.10
+# 의존성 설치 (uv)
+uv sync
 
 # Bot 실행
-python telegram_bot_handler.py
+uv run python telegram_bot_handler.py
 
 # 또는 스크립트 사용
 ./run_telegram_bot.sh

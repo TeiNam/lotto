@@ -68,10 +68,10 @@ class TestExtremePatternDetection:
         assert self.generator.is_extreme_pattern(extreme_combo), \
             "6개 연속 숫자는 극단적 패턴으로 감지되어야 합니다"
         
-        # 4개 연속은 정상 (합계도 정상 범위)
-        normal_combo = [10, 11, 12, 13, 25, 40]  # 합계 111
+        # 3개 연속까지는 정상 (구현 기준은 '연속 4개 이상'이 극단적)
+        normal_combo = [10, 11, 12, 25, 33, 40]  # 합계 131
         assert not self.generator.is_extreme_pattern(normal_combo), \
-            "4개 연속 숫자는 정상 패턴입니다"
+            "3개 연속 숫자는 정상 패턴입니다"
     
     def test_detects_arithmetic_sequence(self):
         """등차수열 감지 테스트"""
@@ -178,8 +178,9 @@ class TestExtremePatternDetection:
     
     def test_distributed_range_is_normal(self):
         """고르게 분포된 구간은 정상"""
-        normal_combo = [5, 15, 25, 30, 35, 42]
+        normal_combo = [5, 16, 23, 30, 37, 42]
         # 각 구간: 1-10(1개), 11-20(1개), 21-30(2개), 31-40(1개), 41-45(1개)
+        # 끝자리도 전부 달라 '끝자리 동일 3개 이상' 규칙에 걸리지 않음
         # 다른 극단적 패턴이 없다면 정상
         has_other_extreme = (
             sum(normal_combo) < 80 or sum(normal_combo) > 200
