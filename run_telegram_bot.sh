@@ -2,18 +2,21 @@
 
 # Telegram Bot 실행 스크립트
 
+set -e
+
 echo "🤖 Telegram Bot 시작 중..."
 echo ""
 
-# 가상환경 활성화 (필요한 경우)
-if [ -d ".venv" ]; then
-    echo "가상환경 활성화..."
-    source .venv/bin/activate
+# uv 설치 확인
+if ! command -v uv >/dev/null 2>&1; then
+    echo "❌ uv 가 설치되어 있지 않습니다."
+    echo "   설치: curl -LsSf https://astral.sh/uv/install.sh | sh"
+    exit 1
 fi
 
-# 필요한 패키지 설치 확인
-echo "패키지 확인 중..."
-pip install python-telegram-bot==21.10 --quiet
+# 의존성 동기화 (uv.lock 기준, 없으면 .venv 자동 생성)
+echo "패키지 동기화 중..."
+uv sync --frozen
 
 echo ""
 echo "✅ 준비 완료!"
@@ -29,4 +32,4 @@ echo "Bot 실행 중... (Ctrl+C로 종료)"
 echo ""
 
 # Bot 실행
-python telegram_bot_handler.py
+uv run python telegram_bot_handler.py
