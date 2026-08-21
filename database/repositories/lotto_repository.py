@@ -246,6 +246,71 @@ class AsyncLottoRepository:
             logger.error(f"예측 결과 조회 중 오류: {e}")
             raise DatabaseError(f"예측 결과 조회 중 오류: {e}")
             
+    @staticmethod
+    async def delete_recommendation(rec_id: int, user_id: int) -> bool:
+        """예측 조합 1건 삭제 (본인 소유만 삭제 가능)
+
+        Args:
+            rec_id: recommand 테이블 PK
+            user_id: 텔레그램 사용자 ID (소유자 검증용)
+
+        Returns:
+            삭제 성공 여부
+        """
+        query = "DELETE FROM recommand WHERE id = %s AND user_id = %s"
+
+        try:
+            rowcount = await AsyncDatabaseConnector.execute_query(
+                query, (rec_id, user_id), fetch=False
+            )
+        except Exception as e:
+            logger.error(f"예측 삭제 중 오류: {e}")
+            raise DatabaseError(f"예측 삭제 중 오류: {e}")
+
+        if not rowcount:
+            logger.warning(f"삭제할 예측 없음 (id={rec_id}, user_id={user_id})")
+            return False
+
+        logger.info(f"예측 삭제 성공 (id={rec_id}, user_id={user_id})")
+        return True
+
+    @staticmethod
+    async def get_scored_predictions() -> List[Dict[str, Any]]:
+        """당첨 결과가 이미 나온 예측 전체 조회 (적중 통계용)
+
+        Returns:
+            [{"user_id", "numbers", "winning", "bonus"}, ...]
+        """
+        query = """
+        SELECT r.user_id,
+               r.`1` AS p1, r.`2` AS p2, r.`3` AS p3, r.`4` AS p4, r.`5` AS p5, r.`6` AS p6,
+               d.`1` AS w1, d.`2` AS w2, d.`3` AS w3, d.`4` AS w4, d.`5` AS w5, d.`6` AS w6,
+               d.bonus
+        FROM recommand r
+        JOIN result d ON d.no = r.next_no
+        """
+
+        try:
+            rows = await AsyncDatabaseConnector.execute_query(query)
+        except Exception as e:
+            logger.error(f"적중 통계 조회 중 오류: {e}")
+            raise DatabaseError(f"적중 통계 조회 중 오류: {e}")
+
+        if not rows:
+            logger.info("채점 가능한 예측이 없습니다")
+            return []
+
+        logger.info(f"채점 가능한 예측 {len(rows)}건 조회 성공")
+        return [
+            {
+                "user_id": row["user_id"],
+                "numbers": [row[f"p{i}"] for i in range(1, 7)],
+                "winning": [row[f"w{i}"] for i in range(1, 7)],
+                "bonus": row["bonus"],
+            }
+            for row in rows
+        ]
+
     @classmethod
     async def execute_raw_query(cls, query: str, params: tuple = None):
         """임의의 쿼리 실행 (디버깅용)"""

@@ -5,8 +5,10 @@
 
 import asyncio
 import logging
+from collections import Counter
 from datetime import datetime
 from functools import wraps
+from math import comb
 from typing import Any, Dict, List, Optional
 
 from telegram import Update, Bot, BotCommand, InlineKeyboardButton, InlineKeyboardMarkup
@@ -430,6 +432,8 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🔮 /generate - 5개 조합 생성 (기본)\n"
         "🔮 /generate [개수] - 원하는 개수만큼 생성 (최대 20개)\n"
         "📋 /mylist - 이번 회차 생성된 전체 번호 보기\n"
+        "🗑 /delete [순번] - /mylist 의 특정 번호 삭제\n"
+        "📈 /stats - 누적 적중 통계\n"
         "🏆 /winning - 최신 회차 당첨 번호 확인\n"
         "📊 /result - 내 예측과 당첨 번호 매칭 확인\n"
         "📊 /result [회차] - 특정 회차 결과 확인\n"
@@ -452,7 +456,11 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "  /generate [개수] - 원하는 개수만큼 생성 (최대 20개)\n"
         "  예: /generate 10\n\n"
         "📋 내 번호 확인:\n"
-        "  /mylist - 이번 회차 생성된 전체 번호 보기\n\n"
+        "  /mylist - 이번 회차 생성된 전체 번호 보기\n"
+        "  /delete [순번] - /mylist 의 특정 번호 삭제\n"
+        "  예: /delete 3   또는   /delete 3 5 7\n\n"
+        "📈 적중 통계:\n"
+        "  /stats - 예측 누적 적중 분포와 이론 확률 비교\n\n"
         "🏆 당첨 확인:\n"
         "  /winning - 최신 회차 당첨 번호 확인\n"
         "  /update - 최신 당첨번호 수동 업데이트\n\n"
@@ -610,6 +618,77 @@ async def mylist_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 
+@restricted
+async def delete_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/mylist 목록에서 특정 예측 번호 삭제 명령어 핸들러"""
+    try:
+        if not context.args:
+            await update.message.reply_text(
+                "🗑 삭제할 순번을 입력해주세요. (/mylist 에 표시된 번호)\n"
+                "예: /delete 3\n"
+                "예: /delete 3 5 7  (여러 개 동시 삭제)"
+            )
+            return
+
+        try:
+            indexes = sorted({int(arg) for arg in context.args})
+        except ValueError:
+            await update.message.reply_text(
+                "순번은 숫자로 입력해주세요.\n예: /delete 3"
+            )
+            return
+
+        last_draw = await AsyncLottoRepository.get_last_draw()
+        if not last_draw:
+            await update.message.reply_text("당첨 번호 정보를 찾을 수 없습니다.")
+            return
+
+        next_draw_no = last_draw['no'] + 1
+        user_id = update.effective_user.id
+        predictions = await AsyncLottoRepository.get_recommendations_for_draw(
+            next_draw_no, user_id=user_id
+        )
+
+        if not predictions:
+            await update.message.reply_text(
+                f"{next_draw_no}회차에 생성한 예측이 없습니다."
+            )
+            return
+
+        invalid = [i for i in indexes if not 1 <= i <= len(predictions)]
+        if invalid:
+            await update.message.reply_text(
+                f"1~{len(predictions)} 범위의 순번만 삭제할 수 있습니다.\n"
+                f"잘못된 값: {', '.join(str(i) for i in invalid)}"
+            )
+            return
+
+        # 순번은 삭제 전 목록 기준이지만 실제 삭제는 id 로 하므로 재계산 불필요
+        deleted_lines = []
+        for index in indexes:
+            prediction = predictions[index - 1]
+            if await AsyncLottoRepository.delete_recommendation(prediction['id'], user_id):
+                numbers_str = ", ".join(str(n) for n in prediction['numbers'])
+                deleted_lines.append(f"{index:2d}. [{numbers_str}]")
+
+        if not deleted_lines:
+            await update.message.reply_text("삭제된 번호가 없습니다.")
+            return
+
+        message = (
+            f"🗑 {next_draw_no}회 예측 {len(deleted_lines)}개 삭제 완료\n\n"
+            + "\n".join(deleted_lines)
+            + f"\n\n남은 조합: {len(predictions) - len(deleted_lines)}개"
+        )
+        await update.message.reply_text(message)
+
+    except Exception as e:
+        logger.error(f"예측 삭제 오류: {e}", exc_info=True)
+        await update.message.reply_text(
+            f"번호 삭제 중 오류가 발생했습니다.\n{str(e)}"
+        )
+
+
 def _split_message(lines: List[str], max_length: int = 4000) -> List[str]:
     """긴 메시지를 텔레그램 제한에 맞게 분할
 
@@ -662,6 +741,82 @@ def _determine_rank(matches: int, bonus_match: bool) -> str:
     else:
         return "낙첨"
 
+
+
+def _match_theory_ratio(match_count: int) -> float:
+    """6/45 로또에서 정확히 match_count 개를 맞출 이론 확률"""
+    return comb(6, match_count) * comb(39, 6 - match_count) / comb(45, 6)
+
+
+def _format_hit_stats(title: str, rows: List[Dict[str, Any]]) -> str:
+    """예측 적중 분포를 이론 확률과 나란히 포맷팅
+
+    Args:
+        title: 섹션 제목
+        rows: get_scored_predictions() 결과
+
+    Returns:
+        여러 줄로 구성된 통계 문자열
+    """
+    total = len(rows)
+    distribution = Counter(
+        len(set(row['numbers']) & set(row['winning'])) for row in rows
+    )
+
+    lines = [f"{title} — 채점 {total}건"]
+    for match_count in range(7):
+        hits = distribution[match_count]
+        # 5·6개 적중은 사실상 발생하지 않으므로 실제 기록이 있을 때만 표시
+        if match_count >= 5 and hits == 0:
+            continue
+        theory = _match_theory_ratio(match_count) * 100
+        lines.append(
+            f"  {match_count}개: {hits}건 "
+            f"({hits / total * 100:.1f}% / 이론 {theory:.2f}%)"
+        )
+
+    winning_hits = sum(distribution[k] for k in range(3, 7))
+    winning_theory = sum(_match_theory_ratio(k) for k in range(3, 7)) * 100
+    lines.append(
+        f"  → 5등 이상: {winning_hits}건 "
+        f"({winning_hits / total * 100:.2f}% / 이론 {winning_theory:.2f}%)"
+    )
+    return "\n".join(lines)
+
+
+@restricted
+async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """누적 적중 통계 명령어 핸들러"""
+    try:
+        rows = await AsyncLottoRepository.get_scored_predictions()
+
+        if not rows:
+            await update.message.reply_text(
+                "채점 가능한 예측이 없습니다.\n"
+                "당첨 번호가 발표된 회차의 예측이 있어야 통계를 낼 수 있습니다."
+            )
+            return
+
+        user_id = update.effective_user.id
+        my_rows = [row for row in rows if row['user_id'] == user_id]
+
+        sections = []
+        if my_rows:
+            sections.append(_format_hit_stats("👤 내 예측", my_rows))
+        sections.append(_format_hit_stats("🌐 전체 예측", rows))
+
+        message = (
+            "📊 누적 적중 통계\n\n"
+            + "\n\n".join(sections)
+            + "\n\n※ 이론값은 완전 무작위 조합의 수학적 기대치입니다."
+        )
+        await update.message.reply_text(message)
+
+    except Exception as e:
+        logger.error(f"적중 통계 조회 오류: {e}", exc_info=True)
+        await update.message.reply_text(
+            f"통계 조회 중 오류가 발생했습니다.\n{str(e)}"
+        )
 
 
 @restricted
@@ -1131,6 +1286,8 @@ def main():
         application.add_handler(CommandHandler("help", help_command))
         application.add_handler(CommandHandler("generate", generate_command))
         application.add_handler(CommandHandler("mylist", mylist_command))
+        application.add_handler(CommandHandler("delete", delete_command))
+        application.add_handler(CommandHandler("stats", stats_command))
         application.add_handler(CommandHandler("winning", check_winning_command))
         application.add_handler(CommandHandler("result", check_result_command))
         application.add_handler(CommandHandler("update", update_command))
@@ -1155,6 +1312,8 @@ def main():
             BotCommand("start", "시작 메시지 표시"),
             BotCommand("generate", "예측 번호 생성"),
             BotCommand("mylist", "이번 회차 내 번호 보기"),
+            BotCommand("delete", "내 번호 삭제 (/mylist 순번)"),
+            BotCommand("stats", "누적 적중 통계"),
             BotCommand("winning", "당첨 번호 확인"),
             BotCommand("result", "결과 확인"),
             BotCommand("balance", "동행복권 예치금 조회"),
