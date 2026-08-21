@@ -3,6 +3,7 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock
 from datetime import datetime, timedelta
 from services.duplicate_checker import DuplicateChecker
+from config.settings import KST
 from services.data_service import AsyncDataService
 
 
@@ -139,7 +140,8 @@ async def test_cache_expiration(mock_data_service, duplicate_checker):
     await duplicate_checker.is_duplicate([1, 2, 3, 4, 5, 6])
     
     # 캐시 타임스탬프를 1시간 이상 전으로 설정
-    duplicate_checker._cache_timestamp = datetime.now() - timedelta(hours=2)
+    # 구현이 datetime.now(KST) 를 쓰므로 tz-aware 로 맞춘다 (naive 면 비교에서 TypeError)
+    duplicate_checker._cache_timestamp = datetime.now(KST) - timedelta(hours=2)
     
     # 두 번째 호출
     await duplicate_checker.is_duplicate([7, 8, 9, 10, 11, 12])
