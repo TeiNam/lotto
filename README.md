@@ -46,6 +46,34 @@ docker-compose up -d
 docker-compose logs -f
 ```
 
+### 로컬 개발 (uv)
+
+의존성 관리는 [uv](https://docs.astral.sh/uv/)를 사용한다. `uv.lock` 이 모든 버전을 고정하므로
+어느 머신에서든 동일한 환경이 재현된다.
+
+```bash
+# uv 설치 (최초 1회)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# 의존성 설치 — .venv 생성 + Python 3.13 준비까지 자동
+uv sync
+
+# API 서버 실행
+uv run python api_server.py     # http://localhost:8000/docs
+
+# Telegram Bot 실행
+uv run python telegram_bot_handler.py
+```
+
+| 작업 | 명령어 |
+|------|--------|
+| 의존성 설치/동기화 | `uv sync` |
+| 락 파일 기준 정확히 재현 | `uv sync --frozen` |
+| 패키지 추가 | `uv add <package>` |
+| 개발용 패키지 추가 | `uv add --dev <package>` |
+| 전체 최신 버전으로 갱신 | `uv lock --upgrade` |
+| 스크립트 실행 | `uv run <command>` |
+
 ### GHCR 이미지 사용
 
 ```bash
@@ -187,7 +215,8 @@ lotto/
 │   ├── property/           # 속성 기반 테스트
 │   └── integration/        # 통합 테스트
 ├── telegram_bot_handler.py # Telegram Bot 핸들러
-└── requirements.txt        # 의존성
+├── pyproject.toml          # 의존성 정의 (uv)
+└── uv.lock                 # 잠긴 의존성 버전
 ```
 
 ## 🐳 Docker 구조
@@ -234,20 +263,22 @@ services:
 
 ```bash
 # 전체 테스트 실행
-pytest
+uv run pytest
 
 # 단위 테스트만
-pytest tests/unit/
+uv run pytest tests/unit/
 
 # 속성 기반 테스트 (Property-Based Testing)
-pytest tests/property/
+uv run pytest tests/property/
 
-# 통합 테스트
-pytest tests/integration/
+# 통합 테스트 (실제 MySQL 필요)
+uv run pytest tests/integration/
 
 # 커버리지 확인
-pytest --cov=. --cov-report=html
+uv run pytest --cov=. --cov-report=html
 ```
+
+> CI 는 `tests/unit` 과 `tests/property` 를 실행하며, 실패 시 Docker 이미지 빌드를 막는다.
 
 ## 📦 배포
 
@@ -296,8 +327,9 @@ docker-compose up -d
 - **Bot**: python-telegram-bot 21.10
 - **스케줄러**: APScheduler 3.11
 - **테스트**: pytest, hypothesis (Property-Based Testing)
+- **패키지 관리**: uv
 - **컨테이너**: Docker, Supervisor
-- **크롤링**: BeautifulSoup4
+- **당첨번호 수집**: 동행복권 공식 JSON API
 
 ## 📝 참고 사항
 
