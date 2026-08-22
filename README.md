@@ -10,6 +10,10 @@
 
 로또 번호 예측 시스템은 암호학적으로 안전한 난수 생성과 극단적 패턴 필터링을 통해 로또 번호를 생성하고, Telegram Bot을 통해 자동화된 예측 및 알림 서비스를 제공합니다.
 
+> **직접 배포해서 자신의 봇으로 운영하는 프로젝트입니다.** 공개된 공용 봇은 제공하지 않습니다.
+> 봇 접근은 `TELEGRAM_ADMIN_IDS` allowlist 로 통제되므로, `@BotFather` 에서 자신의 봇을 만들어
+> 아래 절차대로 띄워야 합니다.
+
 ## ✨ 주요 기능
 
 - 🎲 **랜덤 번호 생성**: 암호학적으로 안전한 난수 생성 (`secrets.SystemRandom`)
@@ -21,6 +25,7 @@
   - 금요일 16시: 구매 알림
   - 토요일 18시: 마감 임박 알림
   - 토요일 21시: 당첨번호 자동 업데이트 (실패 시 10분 간격 최대 3회 재시도)
+- 💳 **동행복권 연동 (선택)**: 본인 계정을 설정하면 텔레그램에서 예치금 조회와 로또6/45 구매까지 가능 (실제 예치금이 차감되는 결제)
 - 🌐 **REST API**: FastAPI 기반 비동기 API
 - 🐳 **Docker 지원**: 원클릭 배포 (API + Bot + MySQL)
 - 📊 **당첨 결과 매칭**: 생성한 번호와 당첨 번호 자동 비교
@@ -144,12 +149,19 @@ DB_NAME=lotto
 DB_PORT=3306
 
 # Telegram Bot
-TELEGRAM_BOT_TOKEN=your_bot_token_here
-TELEGRAM_CHAT_ID=your_chat_id_here
+TELEGRAM_BOT_TOKEN=your_bot_token_here   # @BotFather 에서 발급
+TELEGRAM_CHAT_ID=your_chat_id_here       # 스케줄러 알림을 받을 대화방
+TELEGRAM_ADMIN_IDS=123456789             # 봇 사용을 허용할 user_id (쉼표 구분, 비우면 전원 차단)
+
+# 동행복권 연동 (선택) — 설정하면 예치금 조회·구매 기능이 활성화됩니다
+DHL_USERNAME=
+DHL_PASSWORD=
 
 # MySQL Root (Docker 사용 시)
 MYSQL_ROOT_PASSWORD=your_root_password
 ```
+
+전체 키 목록과 설명은 [.env.example](.env.example) 을 참고하세요.
 
 ## 📡 API 엔드포인트
 
@@ -356,7 +368,6 @@ docker-compose up -d
 ## 📞 문의
 
 - GitHub Issues: https://github.com/TeiNam/lotto/issues
-- Telegram Bot: @Tei_Lotto_Bot
 
 ---
 

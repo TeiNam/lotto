@@ -1,16 +1,18 @@
 # Telegram Bot 사용 가이드
 
-## 🤖 Bot 정보
-- **Bot 이름**: Tei_Lotto_Bot
-- **Bot 링크**: https://t.me/Tei_Lotto_Bot
+> **이 봇은 직접 배포해서 자신의 봇으로 운영하는 것을 전제로 한다.**
+> 봇 접근은 `TELEGRAM_ADMIN_IDS` allowlist 로 통제되므로, 남이 띄워 둔 인스턴스는
+> 사용할 수 없다. 아래 순서대로 자신의 봇을 만들어 띄우면 된다.
 
 ## 📱 Bot 시작하기
 
-### 1. Telegram에서 Bot 찾기
-1. Telegram 앱 열기
-2. 검색창에 `@Tei_Lotto_Bot` 입력
-3. 또는 링크 클릭: https://t.me/Tei_Lotto_Bot
-4. `/start` 명령어로 시작
+### 1. BotFather 로 내 봇 만들기
+1. Telegram 에서 `@BotFather` 와 대화 시작
+2. `/newbot` 입력 → 봇 이름과 username 지정
+3. 발급된 토큰을 `.env` 의 `TELEGRAM_BOT_TOKEN` 에 넣는다
+4. `@userinfobot` 등으로 **자신의 숫자 user ID** 를 확인해 `TELEGRAM_ADMIN_IDS` 에 넣는다
+   - 이 값이 비어 있으면 아무도 봇을 사용할 수 없다
+   - 쉼표로 구분해 여러 명을 허용할 수 있다
 
 ### 2. Bot 서버 실행
 
@@ -91,6 +93,15 @@ uv run python telegram_bot_handler.py
   → 5등 이상: 28건 (2.99% / 이론 2.38%)
 ```
 
+### 💳 동행복권 연동 (선택)
+
+`.env` 에 `DHL_USERNAME` / `DHL_PASSWORD` 를 설정하면 **텔레그램 안에서 예치금 조회와
+로또6/45 구매**까지 할 수 있다. 관련 명령어는 설정 후 봇의 명령어 메뉴에 나타난다.
+
+> ⚠️ 구매는 실제 예치금이 차감되는 **결제**다. 구매 전 인라인 버튼으로 한 번 더
+> 확인을 거치며, 관리자 allowlist 에 있는 사용자만 실행할 수 있다.
+> 자격증명을 비워두면 이 기능은 동작하지 않는다.
+
 ### ❓ 도움말
 ```
 /help
@@ -159,8 +170,9 @@ Bot: 📊 1150회차 결과 확인 📊
 ### 환경 변수 (.env)
 ```bash
 # Telegram 설정
-TELEGRAM_BOT_TOKEN=your_bot_token_here
-TELEGRAM_CHAT_ID=your_chat_id_here
+TELEGRAM_BOT_TOKEN=your_bot_token_here   # BotFather 발급 토큰
+TELEGRAM_CHAT_ID=your_chat_id_here       # 스케줄러 알림을 받을 대화방
+TELEGRAM_ADMIN_IDS=123456789             # 봇 사용을 허용할 user_id (쉼표 구분)
 
 # 데이터베이스 설정
 DB_HOST=localhost
@@ -168,7 +180,13 @@ DB_USER=lotto
 DB_PASSWORD=your_password
 DB_NAME=lotto
 DB_PORT=3306
+
+# 동행복권 연동 (선택)
+DHL_USERNAME=
+DHL_PASSWORD=
 ```
+
+전체 키 목록과 설명은 `.env.example` 을 참고한다.
 
 ## 🤖 자동화 기능
 

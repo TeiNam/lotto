@@ -25,8 +25,13 @@ DB_PORT=3306
 MYSQL_ROOT_PASSWORD=your_root_password
 
 # Telegram Bot 설정
-TELEGRAM_BOT_TOKEN=your_bot_token_here
+TELEGRAM_BOT_TOKEN=your_bot_token_here   # @BotFather 에서 발급
 TELEGRAM_CHAT_ID=your_chat_id_here
+TELEGRAM_ADMIN_IDS=123456789             # 봇 사용을 허용할 user_id (비우면 전원 차단)
+
+# 동행복권 연동 (선택) — 설정하면 예치금 조회·구매 기능이 활성화됩니다
+DHL_USERNAME=
+DHL_PASSWORD=
 ```
 
 ### 2. Docker Compose로 실행
