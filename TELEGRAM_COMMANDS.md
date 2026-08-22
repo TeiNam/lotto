@@ -2,9 +2,13 @@
 
 ## 🚀 빠른 시작
 
-1. Bot 찾기: https://t.me/Tei_Lotto_Bot
-2. `/start` 입력
-3. 명령어 사용!
+이 봇은 **직접 배포해서 자신의 봇으로 운영**한다. 공개 봇은 제공하지 않는다.
+
+1. `@BotFather` 에서 `/newbot` 으로 봇을 만들고 토큰 발급
+2. `.env` 에 `TELEGRAM_BOT_TOKEN` 과 `TELEGRAM_ADMIN_IDS`(자신의 user ID) 설정
+3. 봇 실행 후 `/start` 입력
+
+자세한 절차는 `TELEGRAM_BOT_GUIDE.md` 참고.
 
 ## 📝 명령어 목록
 
