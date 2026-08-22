@@ -12,9 +12,12 @@
 |--------|------|------|
 | `/generate` | 5개 조합 생성 (기본) | `/generate` |
 | `/generate [개수]` | 원하는 개수만큼 생성 | `/generate 10` |
+| `/mylist` | 이번 회차 내 번호 전체 보기 | `/mylist` |
+| `/delete [순번]` | `/mylist` 의 특정 번호 삭제 | `/delete 3 5` |
 | `/winning` | 최신 회차 당첨 번호 확인 | `/winning` |
 | `/result` | 내 예측 결과 확인 | `/result` |
 | `/result [회차]` | 특정 회차 결과 확인 | `/result 1150` |
+| `/stats` | 누적 적중 통계 | `/stats` |
 | `/help` | 도움말 | `/help` |
 
 ## 💡 사용 팁
@@ -32,13 +35,15 @@
 /winning           → 당첨 번호 확인
 /result            → 최신 회차 결과 확인
 /result 1150       → 1150회차 결과 확인
+/delete 3 5        → /mylist 의 3번·5번 조합 삭제
+/stats             → 누적 적중 통계 확인
 ```
 
 ## 🔧 Bot 서버 실행
 
 ```bash
 # 실행
-python telegram_bot_handler.py
+uv run python telegram_bot_handler.py
 
 # 또는
 ./run_telegram_bot.sh
