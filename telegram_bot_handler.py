@@ -210,7 +210,7 @@ async def generate_weekly_predictions():
 
     try:
         predictions = await prediction_service.generate_predictions(
-            num_predictions=10
+            num_predictions=5
         )
 
         if not predictions:
